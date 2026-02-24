@@ -78,12 +78,10 @@ jobs:
       - name: Verify LICENSE exists
         run: test -f LICENSE
 
-  # Release build only when you explicitly need it (manual trigger)
   release:
     name: Release Build
     runs-on: macos-14
     timeout-minutes: 30
-    if: github.event_name == 'workflow_dispatch'
     needs: [critical-tests, lint]
     steps:
       - uses: actions/checkout@v4
