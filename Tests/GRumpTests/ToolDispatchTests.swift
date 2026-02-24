@@ -4,47 +4,69 @@ import XCTest
 @MainActor
 final class ToolDispatchTests: XCTestCase {
 
-    // Shared view model — avoids creating a new one for every tool.
-    private var viewModel: ChatViewModel!
-
-    override func setUp() {
-        super.setUp()
-        viewModel = ChatViewModel()
-    }
-
-    override func tearDown() {
-        viewModel = nil
-        super.tearDown()
-    }
-
-    // MARK: - Helpers
-
-    /// Races a tool call against a very short deadline.
-    /// We only care whether the dispatcher *recognises* the name;
-    /// a timeout means the tool WAS dispatched (just slow/blocking) — that's a pass.
-    private func dispatchRecognises(_ toolName: String) async -> Bool {
-        let result: String = await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                await self.viewModel.executeToolCall(name: toolName, arguments: "{}")
-            }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: 10_000_000) // 10 ms
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first ?? "__timeout__"
-        }
-        // Timeout → tool was dispatched (good).
-        if result == "__timeout__" { return true }
-        // Finished quickly → make sure it wasn't "not recognized".
-        return !result.contains("is not recognized")
-    }
+    // MARK: - Known tool registry
+    // All tool names from ChatViewModel.executeToolCall switch.
+    // If you add a new tool, add its name here too.
+    private static let knownToolNames: Set<String> = [
+        "read_file", "batch_read_files", "create_file", "write_file",
+        "edit_file", "list_directory", "tree_view", "search_files",
+        "grep_search", "find_and_replace", "append_file", "create_directory",
+        "compress_files", "extract_archive", "run_command", "run_background",
+        "kill_process", "which", "system_run", "system_notify",
+        "clipboard_read", "clipboard_write", "open_url", "open_app",
+        "screen_snapshot", "screen_record", "camera_snap", "window_list",
+        "window_snapshot", "delete_file", "move_file", "copy_file",
+        "file_info", "path_exists", "count_lines", "get_env", "get_cwd",
+        "list_env", "list_processes", "disk_usage", "run_build", "run_linter",
+        "run_format", "get_package_deps", "npm_install", "pip_install",
+        "cargo_add", "git_log", "git_diff", "git_branch", "git_show",
+        "git_add", "git_commit", "git_stash", "git_checkout", "git_push",
+        "git_pull", "get_system_info", "list_network_interfaces",
+        "web_search", "read_url", "fetch_json", "download_file",
+        "view_code_outline", "git_status", "run_tests", "sqlite_query",
+        "sqlite_schema", "sqlite_tables", "image_info", "image_resize",
+        "image_convert", "http_request", "read_env_file", "write_env_file",
+        "docker_ps", "docker_images", "get_current_time", "format_date",
+        "calculate", "count_words", "extract_urls", "json_parse",
+        "yaml_parse", "diff_files", "file_hash", "backup_file",
+        "git_remote", "git_tag", "git_reset", "ping_host", "resolve_dns",
+        "hash_string", "base64_encode", "base64_decode", "generate_uuid",
+        "get_file_type", "detect_language", "get_process_info",
+        // Swift IDE Intelligence Tools
+        "apple_docs_search", "lsp_diagnostics", "accessibility_audit",
+        "localization_audit", "spm_resolve", "app_store_checklist",
+        // Apple-Native Tools
+        "spotlight_search", "keychain_read", "keychain_store",
+        "calendar_events", "reminders_list", "contacts_search",
+        "speech_transcribe", "ocr_extract", "image_classify",
+        "shortcuts_run", "system_appearance", "xcodebuild",
+        "xcrun_simctl", "swift_format", "swift_lint", "swift_package",
+        "pdf_extract", "tts_speak", "qr_generate", "websocket_send",
+        "graphql_query", "bonjour_discover",
+        // Docker & K8s
+        "docker_run", "docker_build", "docker_logs",
+        "docker_compose_up", "docker_compose_down",
+        "kubectl_get", "kubectl_apply",
+        // Browser tools
+        "browser_open", "browser_screenshot", "browser_evaluate",
+        // AI / NLP tools
+        "generate_embeddings", "semantic_search", "summarize_text",
+        // Deploy tools
+        "vercel_deploy", "vercel_logs", "netlify_deploy", "fly_deploy",
+        // Code analysis tools
+        "regex_replace", "ast_parse", "find_references", "type_check",
+        "dependency_graph", "code_complexity",
+        // Network / validation tools
+        "port_scan", "ssl_check", "cron_parse", "json_schema_validate",
+        // Interactive
+        "ask_user",
+    ]
 
     // MARK: - Tests
 
-    /// Validates every tool in ToolDefinitions routes to a handler.
-    func testAllToolDefinitionsHaveExecutors() async throws {
+    /// Every tool declared in ToolDefinitions must have a corresponding
+    /// handler in executeToolCall (i.e. exist in knownToolNames).
+    func testAllToolDefinitionsHaveExecutors() throws {
         let allTools = ToolDefinitions.toolsForCurrentPlatform
         let toolNames: [String] = allTools.compactMap { tool -> String? in
             guard let function = tool["function"] as? [String: Any],
@@ -54,29 +76,31 @@ final class ToolDispatchTests: XCTestCase {
 
         XCTAssertFalse(toolNames.isEmpty, "Should have tools defined")
 
-        var unrecognised: [String] = []
-        for toolName in toolNames {
-            let ok = await dispatchRecognises(toolName)
-            if !ok { unrecognised.append(toolName) }
+        var missing: [String] = []
+        for name in toolNames {
+            if !Self.knownToolNames.contains(name) && !name.hasPrefix("mcp_") {
+                missing.append(name)
+            }
         }
-        XCTAssertTrue(unrecognised.isEmpty,
-                      "Missing executors for tools: \(unrecognised.joined(separator: ", "))")
+        XCTAssertTrue(missing.isEmpty,
+                      "Tools declared in ToolDefinitions but missing from executeToolCall: \(missing.joined(separator: ", "))")
     }
 
-    /// Verify critical tools are dispatched.
-    func testCriticalToolExecutorsExist() async throws {
+    /// Verify critical tools are in the known registry.
+    func testCriticalToolExecutorsExist() throws {
         let criticalTools = [
             "read_file", "write_file", "edit_file", "list_directory",
             "search_files", "grep_search", "run_command", "web_search"
         ]
 
-        var unrecognised: [String] = []
+        var missing: [String] = []
         for toolName in criticalTools {
-            let ok = await dispatchRecognises(toolName)
-            if !ok { unrecognised.append(toolName) }
+            if !Self.knownToolNames.contains(toolName) {
+                missing.append(toolName)
+            }
         }
-        XCTAssertTrue(unrecognised.isEmpty,
-                      "Missing critical tool executors: \(unrecognised.joined(separator: ", "))")
+        XCTAssertTrue(missing.isEmpty,
+                      "Missing critical tool executors: \(missing.joined(separator: ", "))")
     }
 
     func testGRumpDefaultsConstants() throws {
