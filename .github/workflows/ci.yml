@@ -14,7 +14,7 @@ jobs:
   build:
     name: Build & Test (macOS)
     runs-on: macos-14
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -28,20 +28,13 @@ jobs:
           key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved', 'Package.swift') }}
           restore-keys: ${{ runner.os }}-spm-
 
-      - name: Build (App)
-        run: swift build --target GRump -c debug
-
-      - name: Build (Server)
-        run: swift build --target GRumpServer -c debug
-
-      - name: Build Tests
-        run: swift build --build-tests
-
-      - name: Run Tests
-        run: swift test --skip-build --parallel
+      - name: Build & Test (Debug)
+        run: |
+          swift build --build-tests -j 3
+          swift test --skip-build --parallel
 
       - name: Build Release
-        run: swift build -c release
+        run: swift build -c release -j 3
 
       - name: Package .app bundle
         run: make app
