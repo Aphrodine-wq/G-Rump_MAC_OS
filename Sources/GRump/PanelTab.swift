@@ -1,0 +1,83 @@
+import SwiftUI
+
+/// Panels available in the right-side icon sidebar.
+enum PanelTab: String, CaseIterable, Identifiable {
+    case chat
+    case files
+    case preview
+    case simulator
+    case git
+    case tests
+    case assets
+    case localization
+    case schema
+    case profiling
+    case logs
+    case spm
+    case xcode
+    case docs
+    case terminal
+    case appstore
+    case accessibility
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .chat: return "bubble.left.and.bubble.right.fill"
+        case .files: return "folder.fill"
+        case .preview: return "eye.fill"
+        case .simulator: return "iphone"
+        case .git: return "arrow.triangle.branch"
+        case .tests: return "checkmark.diamond.fill"
+        case .assets: return "photo.stack.fill"
+        case .localization: return "globe"
+        case .schema: return "cylinder.split.1x2.fill"
+        case .profiling: return "gauge.with.dots.needle.67percent"
+        case .logs: return "doc.text.magnifyingglass"
+        case .spm: return "shippingbox.fill"
+        case .xcode: return "hammer.fill"
+        case .docs: return "book.fill"
+        case .terminal: return "terminal.fill"
+        case .appstore: return "bag.fill"
+        case .accessibility: return "figure.stand"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .chat: return "Chat"
+        case .files: return "Files"
+        case .preview: return "Preview"
+        case .simulator: return "Simulator"
+        case .git: return "Git"
+        case .tests: return "Tests"
+        case .assets: return "Assets"
+        case .localization: return "Localization"
+        case .schema: return "Schema"
+        case .profiling: return "Profiling"
+        case .logs: return "Logs"
+        case .spm: return "Packages"
+        case .xcode: return "Xcode"
+        case .docs: return "Docs"
+        case .terminal: return "Terminal"
+        case .appstore: return "App Store"
+        case .accessibility: return "A11y"
+        }
+    }
+
+    var shortcut: String? {
+        switch self {
+        case .chat: return "1"
+        case .files: return "2"
+        case .preview: return "3"
+        case .simulator: return "4"
+        case .git: return "5"
+        case .tests: return "6"
+        case .terminal: return "7"
+        case .spm: return "8"
+        case .docs: return "9"
+        default: return nil
+        }
+    }
+}

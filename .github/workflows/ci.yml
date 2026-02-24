@@ -1,0 +1,85 @@
+name: G-Rump CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Test (macOS)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved', 'Package.swift') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Build (App)
+        run: swift build --target GRump -c debug
+
+      - name: Build (Server)
+        run: swift build --target GRumpServer -c debug
+
+      - name: Run Tests
+        run: swift test --parallel
+
+      - name: Build Release
+        run: swift build -c release
+
+      - name: Package .app bundle
+        run: make app
+
+  lint:
+    name: Code Quality
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for force unwraps (non-constant)
+        run: |
+          # Allow documented constant force unwraps (swiftlint:disable comments)
+          VIOLATIONS=$(grep -rn ')!' Sources/GRump/*.swift Sources/GRump/**/*.swift 2>/dev/null \
+            | grep -v 'swiftlint:disable' \
+            | grep -v 'isEmpty' \
+            | grep -v '.filter' \
+            | grep -v '.contains' \
+            | grep -v '// ' \
+            || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "⚠️  Potential force unwraps found (review needed):"
+            echo "$VIOLATIONS"
+          fi
+
+      - name: Check for print() statements
+        run: |
+          PRINTS=$(grep -rn 'print(' Sources/GRump/*.swift 2>/dev/null \
+            | grep -v 'Text("print' \
+            | grep -v "python3.*print" \
+            | grep -v "bc.*print" \
+            || true)
+          if [ -n "$PRINTS" ]; then
+            echo "❌ Found print() — use GRumpLogger instead:"
+            echo "$PRINTS"
+            exit 1
+          fi
+
+      - name: Verify PrivacyInfo.xcprivacy exists
+        run: test -f Sources/GRump/Resources/PrivacyInfo.xcprivacy
+
+      - name: Verify LICENSE exists
+        run: test -f LICENSE

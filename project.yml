@@ -1,0 +1,124 @@
+name: GRump
+options:
+  bundleIdPrefix: com.grump
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_STRICT_CONCURRENCY: targeted
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "" # Set your team ID here
+    ENABLE_PREVIEWS: YES
+
+targets:
+  GRump:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/GRump
+        excludes:
+          - Info.plist
+    resources:
+      - path: Sources/GRump/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grump.app
+        INFOPLIST_FILE: Sources/GRump/Info.plist
+        CODE_SIGN_ENTITLEMENTS: GRump.entitlements
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS:
+          - GRUMP_XCODE_BUILD
+        LD_RUNPATH_SEARCH_PATHS:
+          - "@executable_path/../Frameworks"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+    entitlements:
+      path: GRump.entitlements
+    scheme:
+      testTargets:
+        - GRumpTests
+      environmentVariables:
+        - variable: GRUMP_ENV
+          value: development
+
+  GRump-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/GRump
+        excludes:
+          - Info.plist
+    resources:
+      - path: Sources/GRump/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grump.app
+        INFOPLIST_FILE: Sources/GRump/Info.plist
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS:
+          - GRUMP_XCODE_BUILD
+        TARGETED_DEVICE_FAMILY: "1,2"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+
+  GRumpServer:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/GRumpServer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grump.server
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+  GRumpTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/GRumpTests
+    dependencies:
+      - target: GRump
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grump.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/GRump.app/Contents/MacOS/GRump"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+  GRumpXcodeExtension:
+    type: extensionKit-extension
+    platform: macOS
+    sources:
+      - path: Sources/GRumpXcodeExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grump.app.xcode-extension
+        LD_RUNPATH_SEARCH_PATHS:
+          - "@executable_path/../Frameworks"
+          - "@executable_path/../../../../Frameworks"
+
+schemes:
+  GRump:
+    build:
+      targets:
+        GRump: all
+    run:
+      config: Debug
+    test:
+      targets:
+        - GRumpTests
+    archive:
+      config: Release
+
+  GRump-Release:
+    build:
+      targets:
+        GRump: all
+    run:
+      config: Release
+    archive:
+      config: Release
