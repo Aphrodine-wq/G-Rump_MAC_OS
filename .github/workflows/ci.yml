@@ -76,6 +76,12 @@ jobs:
             | grep -v 'Text("print' \
             | grep -v "python3.*print" \
             | grep -v "bc.*print" \
+            | grep -v 'fingerprint' \
+            | grep -v 'blueprint' \
+            | grep -v 'footprint' \
+            | grep -v 'sprint(' \
+            | grep -v 'prettyPrint' \
+            | grep -v 'debugPrint' \
             || true)
           if [ -n "$PRINTS" ]; then
             echo "❌ Found print() — use GRumpLogger instead:"
