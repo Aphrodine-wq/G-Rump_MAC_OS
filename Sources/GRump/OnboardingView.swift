@@ -16,7 +16,10 @@ struct OnboardingView: View {
     @State private var direction: Edge = .trailing
     @State private var selectedOnboardingProvider: AIProvider = .anthropic
 
-    private let totalSteps = 4
+    private let totalSteps = 6
+    @State private var selectedSecurityPreset: ExecSecurityPreset = .balanced
+    @State private var selectedSkillPacks: Set<String> = []
+    @AppStorage("PrivacyConsentGiven") private var privacyConsentGiven = false
 
     var body: some View {
         ZStack {
@@ -45,6 +48,8 @@ struct OnboardingView: View {
                     case 1: stepModelSelection
                     case 2: stepThemeAppearance
                     case 3: stepWorkspace
+                    case 4: stepSecurityPermissions
+                    case 5: stepSkillsQuickStart
                     default: stepWelcomeAuth
                     }
                 }
@@ -82,6 +87,7 @@ struct OnboardingView: View {
     // MARK: - Step 1: Welcome + Auth
 
     private var stepWelcomeAuth: some View {
+        GeometryReader { geo in
         ScrollView(.vertical, showsIndicators: false) {
         VStack(spacing: Spacing.giant) {
             FrownyFaceLogo(size: 64)
@@ -161,8 +167,26 @@ struct OnboardingView: View {
                 }
 
             }
+
+            // Privacy consent
+            VStack(spacing: Spacing.md) {
+                Toggle(isOn: $privacyConsentGiven) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("I understand that my messages will be sent to AI providers for processing")
+                            .font(Typography.bodySmall)
+                            .foregroundColor(themeManager.palette.textPrimary)
+                        Text("Your data is not used for model training. See our privacy policy for details.")
+                            .font(Typography.captionSmall)
+                            .foregroundColor(themeManager.palette.textMuted)
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+            .frame(maxWidth: 480)
         }
         .padding(.horizontal, Spacing.huge)
+        .frame(maxWidth: .infinity, minHeight: geo.size.height)
+        }
         }
     }
 
@@ -199,6 +223,7 @@ struct OnboardingView: View {
         case .anthropic: return "sk-ant-..."
         case .openAI: return "sk-..."
         case .openRouter: return "sk-or-..."
+        case .google: return "AIza..."
         default: return "API key..."
         }
     }
@@ -275,6 +300,7 @@ struct OnboardingView: View {
         case .anthropic: return "sparkles"
         case .openAI: return "brain"
         case .openRouter: return "globe"
+        case .google: return "globe.americas"
         case .ollama: return "desktopcomputer"
         case .onDevice: return "apple.logo"
         }
@@ -827,6 +853,195 @@ struct OnboardingView: View {
             }
         }
         #endif
+    }
+
+    // MARK: - Step 5: Security & Permissions
+
+    private var stepSecurityPermissions: some View {
+        VStack(spacing: Spacing.giant) {
+            VStack(spacing: Spacing.lg) {
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(themeManager.palette.effectiveAccent)
+
+                Text("Security posture")
+                    .font(Typography.displayMedium)
+                    .foregroundColor(themeManager.palette.textPrimary)
+
+                Text("Choose how G-Rump handles shell commands and system access. You can change this anytime in Settings.")
+                    .font(Typography.bodySmall)
+                    .foregroundColor(themeManager.palette.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+            }
+
+            VStack(spacing: Spacing.lg) {
+                ForEach(ExecSecurityPreset.allCases) { preset in
+                    Button {
+                        selectedSecurityPreset = preset
+                        #if os(macOS)
+                        ExecApprovalsStorage.save(preset.toConfig())
+                        #endif
+                    } label: {
+                        HStack(spacing: Spacing.xl) {
+                            Image(systemName: preset.icon)
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(selectedSecurityPreset == preset ? themeManager.palette.effectiveAccent : themeManager.palette.textMuted)
+                                .frame(width: 32)
+
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text(preset.displayName)
+                                    .font(Typography.bodySemibold)
+                                    .foregroundColor(themeManager.palette.textPrimary)
+                                Text(preset.description)
+                                    .font(Typography.captionSmall)
+                                    .foregroundColor(themeManager.palette.textSecondary)
+                                    .lineLimit(2)
+                            }
+
+                            Spacer()
+
+                            if selectedSecurityPreset == preset {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(themeManager.palette.effectiveAccent)
+                            }
+                        }
+                        .padding(Spacing.xl)
+                        .frame(maxWidth: 440)
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                .fill(selectedSecurityPreset == preset
+                                      ? themeManager.palette.effectiveAccent.opacity(0.1)
+                                      : themeManager.palette.bgCard)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                .stroke(selectedSecurityPreset == preset
+                                        ? themeManager.palette.effectiveAccent.opacity(0.5)
+                                        : themeManager.palette.borderCrisp, lineWidth: Border.thin)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(preset.displayName) security preset")
+                    .accessibilityHint(preset.description)
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.huge)
+    }
+
+    // MARK: - Step 6: Skills Quick Start
+
+    private struct SkillPack: Identifiable {
+        let id: String
+        let name: String
+        let icon: String
+        let description: String
+        let skillIds: [String]
+    }
+
+    private static let skillPacks: [SkillPack] = [
+        SkillPack(id: "ios", name: "iOS Development", icon: "iphone", description: "Swift, SwiftUI, Xcode, App Store prep",
+                  skillIds: ["swift-ios", "swiftui-migration", "swiftdata", "async-await", "app-store-prep", "privacy-manifest", "coreml-conversion"]),
+        SkillPack(id: "fullstack", name: "Full Stack", icon: "server.rack", description: "React, Node, APIs, databases",
+                  skillIds: ["full-stack", "react-nextjs", "python-fastapi", "api-design", "database-design", "graphql"]),
+        SkillPack(id: "devops", name: "DevOps", icon: "gearshape.2.fill", description: "CI/CD, Docker, Kubernetes, Terraform",
+                  skillIds: ["ci-cd", "devops", "docker-deploy", "kubernetes", "terraform", "aws-serverless"]),
+        SkillPack(id: "quality", name: "Code Quality", icon: "checkmark.seal.fill", description: "Reviews, testing, refactoring, security",
+                  skillIds: ["code-review", "testing", "test-generation", "refactoring", "security-audit", "performance", "accessibility"]),
+        SkillPack(id: "aiml", name: "AI & ML", icon: "brain.head.profile", description: "Prompt engineering, CoreML, MLX, data science",
+                  skillIds: ["prompt-engineering", "coreml-conversion", "mlx-training", "data-science"]),
+    ]
+
+    private var stepSkillsQuickStart: some View {
+        VStack(spacing: Spacing.giant) {
+            VStack(spacing: Spacing.lg) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(themeManager.palette.effectiveAccent)
+
+                Text("Enable skill packs")
+                    .font(Typography.displayMedium)
+                    .foregroundColor(themeManager.palette.textPrimary)
+
+                Text("Skills teach G-Rump domain expertise. Pick packs that match your work — you can customize later in Settings.")
+                    .font(Typography.bodySmall)
+                    .foregroundColor(themeManager.palette.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+            }
+
+            VStack(spacing: Spacing.md) {
+                ForEach(Self.skillPacks) { pack in
+                    Button {
+                        if selectedSkillPacks.contains(pack.id) {
+                            selectedSkillPacks.remove(pack.id)
+                        } else {
+                            selectedSkillPacks.insert(pack.id)
+                        }
+                        applySelectedSkillPacks()
+                    } label: {
+                        HStack(spacing: Spacing.xl) {
+                            Image(systemName: pack.icon)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(selectedSkillPacks.contains(pack.id) ? themeManager.palette.effectiveAccent : themeManager.palette.textMuted)
+                                .frame(width: 28)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(pack.name)
+                                    .font(Typography.bodySmallSemibold)
+                                    .foregroundColor(themeManager.palette.textPrimary)
+                                Text(pack.description)
+                                    .font(Typography.captionSmall)
+                                    .foregroundColor(themeManager.palette.textSecondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: selectedSkillPacks.contains(pack.id) ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 18))
+                                .foregroundColor(selectedSkillPacks.contains(pack.id) ? themeManager.palette.effectiveAccent : themeManager.palette.textMuted.opacity(0.4))
+                        }
+                        .padding(Spacing.lg)
+                        .frame(maxWidth: 440)
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .fill(selectedSkillPacks.contains(pack.id)
+                                      ? themeManager.palette.effectiveAccent.opacity(0.08)
+                                      : themeManager.palette.bgCard)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .stroke(selectedSkillPacks.contains(pack.id)
+                                        ? themeManager.palette.effectiveAccent.opacity(0.4)
+                                        : themeManager.palette.borderCrisp, lineWidth: Border.thin)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(pack.name) skill pack")
+                    .accessibilityHint(pack.description)
+                }
+            }
+
+            if !selectedSkillPacks.isEmpty {
+                let count = Set(Self.skillPacks.filter { selectedSkillPacks.contains($0.id) }.flatMap(\.skillIds)).count
+                Text("\(count) skills enabled")
+                    .font(Typography.captionSmallMedium)
+                    .foregroundColor(themeManager.palette.effectiveAccent)
+            }
+        }
+        .padding(.horizontal, Spacing.huge)
+    }
+
+    private func applySelectedSkillPacks() {
+        var allIds: Set<String> = []
+        for pack in Self.skillPacks where selectedSkillPacks.contains(pack.id) {
+            for skillId in pack.skillIds {
+                allIds.insert("global:\(skillId)")
+            }
+        }
+        SkillsSettingsStorage.saveAllowlist(allIds)
     }
 
     // MARK: - Navigation Buttons

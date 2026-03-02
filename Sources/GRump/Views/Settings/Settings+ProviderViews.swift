@@ -43,7 +43,7 @@ extension SettingsView {
                     case .openAI:
                         providerBlock(
                             provider: .openAI,
-                            subtitle: "Direct access to GPT-4.1, o3, o4 Mini, and more.",
+                            subtitle: "Direct access to Codex 5.3, GPT-4o, o3, o4 Mini, and more.",
                             registry: registry
                         ) {
                             ForEach(registry.getModels(for: .openAI), id: \.id) { model in
@@ -53,10 +53,20 @@ extension SettingsView {
                     case .anthropic:
                         providerBlock(
                             provider: .anthropic,
-                            subtitle: "Direct access to Claude Opus 4, Sonnet 4, Haiku 3.5.",
+                            subtitle: "Direct access to Claude Opus 4.6, Sonnet 4.6, Haiku 3.5.",
                             registry: registry
                         ) {
                             ForEach(registry.getModels(for: .anthropic), id: \.id) { model in
+                                enhancedModelRow(model)
+                            }
+                        }
+                    case .google:
+                        providerBlock(
+                            provider: .google,
+                            subtitle: "Direct access to Gemini 3.1 Pro and Flash.",
+                            registry: registry
+                        ) {
+                            ForEach(registry.getModels(for: .google), id: \.id) { model in
                                 enhancedModelRow(model)
                             }
                         }
@@ -341,6 +351,7 @@ extension SettingsView {
         case .openRouter: return "globe"
         case .openAI: return "brain"
         case .anthropic: return "sparkles"
+        case .google: return "globe.americas"
         case .ollama: return "desktopcomputer"
         case .onDevice: return "apple.logo"
         }

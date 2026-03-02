@@ -33,7 +33,7 @@ final class WritingToolsService: ObservableObject {
     // MARK: - Availability Check
     
     private func checkWritingToolsAvailability() {
-        if #available(macOS 14.0, iOS 17.0, *) {
+        if #available(macOS 15.0, iOS 18.0, *) {
             isWritingToolsAvailable = true
         } else {
             isWritingToolsAvailable = false
@@ -177,14 +177,43 @@ final class WritingToolsService: ObservableObject {
     // MARK: - Private Implementation
     
     private func generateText(prompt: String, context: WritingContext) async throws -> WritingSuggestion {
-        // This would integrate with Apple's Writing Tools
-        // For now, simulate with AI service
-        
-        // Use NLP tokenization to generate a structured response from the prompt
-        let response = "[AI suggestion based on: \(prompt.prefix(100))...]"
-        
+        // Read API key and model from the same AppStorage the chat system uses
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterAPIKey") ?? ""
+        let modelId = UserDefaults.standard.string(forKey: "SelectedModel") ?? ""
+
+        guard !apiKey.isEmpty else {
+            throw WritingToolsError.processingFailed("No API key configured. Set an API key in Settings to use Writing Tools.")
+        }
+        guard !modelId.isEmpty else {
+            throw WritingToolsError.processingFailed("No AI model selected. Choose a model in Settings.")
+        }
+
+        let systemMsg = Message(role: .system, content: "You are a precise writing assistant. Respond only with the requested text, no explanations or preamble.")
+        let userMsg = Message(role: .user, content: prompt)
+        let messages = [systemMsg, userMsg]
+        let service = OpenRouterService()
+        let stream = service.streamMessage(messages: messages, apiKey: apiKey, model: modelId)
+
+        var accumulated = ""
+        do {
+            for try await event in stream {
+                switch event {
+                case .text(let text):
+                    accumulated += text
+                case .done:
+                    break
+                case .toolCallDelta:
+                    break
+                }
+            }
+        } catch {
+            GRumpLogger.ai.error("WritingTools generation failed: \(error.localizedDescription)")
+            throw WritingToolsError.processingFailed(error.localizedDescription)
+        }
+
+        let text = accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
         return WritingSuggestion(
-            text: response,
+            text: text.isEmpty ? "No suggestion generated." : text,
             confidence: 0.9,
             context: context,
             timestamp: Date()
@@ -357,7 +386,7 @@ final class WritingToolsService: ObservableObject {
     }
     
     private func getGrammarSuggestions(_ text: String) async -> [WritingSuggestion]? {
-        #if canImport(NaturalLanguage)
+        #if os(macOS)
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
         tagger.string = text
         var issues: [WritingSuggestion] = []

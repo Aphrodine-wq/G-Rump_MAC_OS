@@ -45,4 +45,125 @@ final class ActivityStoreTests: XCTestCase {
         // Should cap at maxInMemory (200)
         XCTAssertLessThanOrEqual(store.entries.count, 200)
     }
+
+    // MARK: - Expanded Tests
+
+    @MainActor
+    func testActivityStoreClear() {
+        let store = ActivityStore()
+        store.append(ActivityEntry(toolName: "a", summary: "s", success: true))
+        store.append(ActivityEntry(toolName: "b", summary: "s", success: true))
+        XCTAssertEqual(store.entries.count, 2)
+        store.clear()
+        XCTAssertTrue(store.entries.isEmpty)
+    }
+
+    @MainActor
+    func testActivityStoreNewestFirst() {
+        let store = ActivityStore()
+        store.append(ActivityEntry(toolName: "first", summary: "1", success: true))
+        store.append(ActivityEntry(toolName: "second", summary: "2", success: true))
+        XCTAssertEqual(store.entries.first?.toolName, "second",
+            "Most recent entry should be at index 0")
+    }
+
+    func testActivityEntryEquatable() {
+        let id = UUID()
+        let ts = Date()
+        let a = ActivityEntry(id: id, timestamp: ts, toolName: "t", summary: "s", success: true)
+        let b = ActivityEntry(id: id, timestamp: ts, toolName: "t", summary: "s", success: true)
+        XCTAssertEqual(a, b)
+    }
+
+    func testActivityEntryNotEqual() {
+        let a = ActivityEntry(toolName: "t", summary: "s", success: true)
+        let b = ActivityEntry(toolName: "t", summary: "s", success: true)
+        XCTAssertNotEqual(a, b, "Different UUIDs should make entries not equal")
+    }
+
+    func testActivityEntryMetadataFilePath() {
+        let meta = ActivityEntry.Metadata(filePath: "/src/main.swift", command: nil)
+        XCTAssertEqual(meta.filePath, "/src/main.swift")
+        XCTAssertNil(meta.command)
+    }
+
+    func testActivityEntryMetadataCommand() {
+        let meta = ActivityEntry.Metadata(filePath: nil, command: "swift test")
+        XCTAssertNil(meta.filePath)
+        XCTAssertEqual(meta.command, "swift test")
+    }
+
+    func testActivityEntryNilMetadata() {
+        let entry = ActivityEntry(toolName: "t", summary: "s", success: true, metadata: nil)
+        XCTAssertNil(entry.metadata)
+    }
+
+    func testActivityEntryNilConversationId() {
+        let entry = ActivityEntry(toolName: "t", summary: "s", success: true, conversationId: nil)
+        XCTAssertNil(entry.conversationId)
+    }
+
+    func testActivityEntryWithConversationId() {
+        let cid = UUID()
+        let entry = ActivityEntry(toolName: "t", summary: "s", success: true, conversationId: cid)
+        XCTAssertEqual(entry.conversationId, cid)
+    }
+
+    func testActivityEntryTimestampIsRecent() {
+        let entry = ActivityEntry(toolName: "t", summary: "s", success: true)
+        let diff = abs(entry.timestamp.timeIntervalSinceNow)
+        XCTAssertLessThan(diff, 2, "Timestamp should be within 2 seconds of now")
+    }
+
+    func testMetadataCodableRoundTrip() throws {
+        let meta = ActivityEntry.Metadata(filePath: "/test", command: "ls -la")
+        let data = try JSONEncoder().encode(meta)
+        let decoded = try JSONDecoder().decode(ActivityEntry.Metadata.self, from: data)
+        XCTAssertEqual(decoded, meta)
+    }
+
+    func testMetadataEquatable() {
+        let a = ActivityEntry.Metadata(filePath: "/x", command: "y")
+        let b = ActivityEntry.Metadata(filePath: "/x", command: "y")
+        XCTAssertEqual(a, b)
+    }
+
+    @MainActor
+    func testActivityStorePersistenceRoundTrip() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("grump-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        let path = tmpDir.appendingPathComponent("activity.json").path
+
+        defer { try? FileManager.default.removeItem(atPath: tmpDir.path) }
+
+        let store1 = ActivityStore()
+        store1.setPersistencePath(path)
+        store1.append(ActivityEntry(toolName: "saved", summary: "persisted", success: true))
+        XCTAssertEqual(store1.entries.count, 1)
+
+        let store2 = ActivityStore()
+        store2.setPersistencePath(path)
+        XCTAssertEqual(store2.entries.count, 1)
+        XCTAssertEqual(store2.entries.first?.toolName, "saved")
+    }
+
+    @MainActor
+    func testActivityStoreClearRemovesPersisted() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("grump-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        let path = tmpDir.appendingPathComponent("activity.json").path
+
+        defer { try? FileManager.default.removeItem(atPath: tmpDir.path) }
+
+        let store = ActivityStore()
+        store.setPersistencePath(path)
+        store.append(ActivityEntry(toolName: "a", summary: "s", success: true))
+        store.clear()
+
+        let store2 = ActivityStore()
+        store2.setPersistencePath(path)
+        XCTAssertTrue(store2.entries.isEmpty, "Clear should persist the empty state")
+    }
 }

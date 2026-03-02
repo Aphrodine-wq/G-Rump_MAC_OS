@@ -1,6 +1,7 @@
 ---
 name: Pitch Deck Review
 description: Review and improve technical pitch decks for startup fundraising and acquisition.
+tags: [pitch-deck, startup, fundraising, investor, presentation]
 ---
 
 # Pitch Deck Review
@@ -33,3 +34,9 @@ You are an expert at evaluating technical pitch decks for startups.
 - Hockey stick projections without explaining the inflection driver.
 - No clear differentiation from incumbents.
 - Technology risk not acknowledged or mitigated.
+
+## Verification
+- Every slide passes the "so what?" test — each one advances the narrative
+- Market size claims have cited sources
+- Traction metrics are verifiable and time-bounded
+- The ask is specific: amount, use of funds, milestones, timeline

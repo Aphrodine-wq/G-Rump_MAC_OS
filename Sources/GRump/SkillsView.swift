@@ -37,16 +37,25 @@ struct SkillsView: View {
 
         static func category(for baseId: String) -> SkillCategory {
             switch baseId {
-            case "code-review", "code-review-pr", "debugging", "refactoring", "testing", "test-generation", "documentation", "performance", "api-design", "database-design", "accessibility", "security-audit", "writing":
+            case "code-review", "code-review-pr", "debugging", "refactoring", "testing", "test-generation",
+                 "documentation", "technical-writing", "performance", "api-design", "database-design",
+                 "accessibility", "security-audit", "writing":
                 return .codeQuality
             case "swift-ios", "swiftui-migration", "swiftdata", "async-await", "app-store-prep", "privacy-manifest":
                 return .appleEcosystem
-            case "coreml-conversion", "prompt-engineering", "mlx-training":
+            case "coreml-conversion", "prompt-engineering", "mlx-training",
+                 "fine-tuning", "rag-pipeline", "llm-observability", "mcp-server", "ai-agent-design":
                 return .aiMl
-            case "devops", "ci-cd", "docker-deploy", "terraform", "kubernetes", "monorepo", "code-migration":
+            case "devops", "ci-cd", "docker-deploy", "terraform", "kubernetes", "monorepo", "code-migration",
+                 "platform-engineering", "observability", "edge-computing":
                 return .devOps
-            case "pitch-deck", "technical-dd", "competitive-analysis":
+            case "pitch-deck", "technical-dd", "competitive-analysis",
+                 "competitive-intel", "product-strategy", "pricing-monetization", "growth-analytics", "cost-optimization":
                 return .business
+            case "pentesting", "exploit-analysis", "incident-response", "network-forensics", "reverse-engineering":
+                return .specialized
+            case "combo-architect", "combo-deep-dive", "combo-red-team", "combo-ship-it", "combo-teacher", "combo-war-room":
+                return .specialized
             case "regex", "graphql", "rapid-prototype", "plan", "full-stack", "spec", "argue",
                  "react-nextjs", "python-fastapi", "rust-systems", "flutter-dart", "unity-gamedev",
                  "data-science", "aws-serverless", "system-design", "research":

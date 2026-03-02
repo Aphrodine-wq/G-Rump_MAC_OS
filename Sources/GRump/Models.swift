@@ -245,15 +245,16 @@ struct ParallelAgentState: Identifiable, Sendable {
 // MARK: - Available Models (OpenRouter)
 
 enum AIModel: String, CaseIterable, Identifiable {
-    // Pro-only: Paying users (Pro/Team) see these 4
+    // Pro-only: Paying users (Pro/Team) see these
     case claudeOpus46      = "anthropic/claude-opus-4.6"
-    case gemini31Pro       = "google/gemini-2.5-pro-preview"
+    case gemini31Pro       = "google/gemini-3.1-pro"
     case claudeSonnet46    = "anthropic/claude-sonnet-4.6"
+    case codex53           = "openai/codex-5.3"
     case kimiK25           = "moonshotai/kimi-k2.5"
 
     // Fast + Smart (Free tier users)
     case claudeSonnet4     = "anthropic/claude-sonnet-4"
-    case gemini25Flash     = "google/gemini-2.5-flash-preview"
+    case gemini31Flash     = "google/gemini-3.1-flash"
     case deepseekChat      = "deepseek/deepseek-chat-v3-0324:free"
 
     // Free — best open-source coding models (2026)
@@ -269,7 +270,7 @@ enum AIModel: String, CaseIterable, Identifiable {
 
     var requiresPaidTier: Bool {
         switch self {
-        case .claudeOpus46, .gemini31Pro, .claudeSonnet46, .kimiK25: return true
+        case .claudeOpus46, .gemini31Pro, .claudeSonnet46, .codex53, .kimiK25: return true
         case .claudeSonnet4: return false
         default: return false
         }
@@ -280,9 +281,10 @@ enum AIModel: String, CaseIterable, Identifiable {
         case .claudeOpus46:     return "Claude Opus 4.6"
         case .gemini31Pro:      return "Gemini 3.1 Pro"
         case .claudeSonnet46:   return "Claude Sonnet 4.6"
+        case .codex53:          return "Codex 5.3"
         case .kimiK25:          return "Kimi K2.5"
         case .claudeSonnet4:    return "Claude Sonnet 4"
-        case .gemini25Flash:    return "Gemini 2.5 Flash"
+        case .gemini31Flash:    return "Gemini 3.1 Flash"
         case .deepseekChat:     return "DeepSeek V3"
         case .qwen3Coder:       return "Qwen3 Coder 480B"
         case .deepseekR1:       return "DeepSeek R1"
@@ -297,11 +299,12 @@ enum AIModel: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .claudeOpus46:     return "Flagship frontier model — complex coding, agents, long context"
-        case .gemini31Pro:      return "Flagship reasoning, complex coding, long context"
+        case .gemini31Pro:      return "Flagship reasoning, complex coding, 1M context"
         case .claudeSonnet46:   return "Frontier Sonnet — coding, agents, professional work"
+        case .codex53:          return "OpenAI's latest coding model — agentic, multi-file, deep reasoning"
         case .kimiK25:          return "Strong reasoning and visual coding, top tool use"
         case .claudeSonnet4:    return "Balanced coding and reasoning, excellent tool use"
-        case .gemini25Flash:    return "Speed king, great for iteration"
+        case .gemini31Flash:    return "Speed king — fast iteration, great for drafting"
         case .deepseekChat:     return "Strong coder, free DeepSeek V3"
         case .qwen3Coder:       return "Best free coding model, 480B MoE, agentic tool use"
         case .deepseekR1:       return "Open-source reasoning on par with o1, 164K context"
@@ -318,9 +321,10 @@ enum AIModel: String, CaseIterable, Identifiable {
         case .claudeOpus46:     return 1_000_000
         case .gemini31Pro:      return 1_000_000
         case .claudeSonnet46:   return 1_000_000
+        case .codex53:          return 200_000
         case .kimiK25:          return 262_144
         case .claudeSonnet4:    return 200_000
-        case .gemini25Flash:    return 1_000_000
+        case .gemini31Flash:    return 1_000_000
         case .deepseekChat:     return 128_000
         case .qwen3Coder:       return 262_000
         case .deepseekR1:       return 164_000
@@ -337,9 +341,10 @@ enum AIModel: String, CaseIterable, Identifiable {
         case .claudeOpus46:     return 65_536
         case .gemini31Pro:      return 65_536
         case .claudeSonnet46:   return 65_536
+        case .codex53:          return 65_536
         case .kimiK25:          return 65_536
         case .claudeSonnet4:    return 16_000
-        case .gemini25Flash:    return 65_536
+        case .gemini31Flash:    return 65_536
         case .deepseekChat:     return 16_384
         case .qwen3Coder:       return 32_768
         case .deepseekR1:       return 32_768
@@ -353,9 +358,9 @@ enum AIModel: String, CaseIterable, Identifiable {
 
     var tier: String {
         switch self {
-        case .claudeOpus46, .gemini31Pro, .claudeSonnet46, .kimiK25:
+        case .claudeOpus46, .gemini31Pro, .claudeSonnet46, .codex53, .kimiK25:
             return "Pro"
-        case .claudeSonnet4, .gemini25Flash, .deepseekChat:
+        case .claudeSonnet4, .gemini31Flash, .deepseekChat:
             return "Fast"
         case .qwen3Coder, .deepseekR1, .gptOss120b, .trinityLarge, .step35Flash, .llama33, .glm45Air:
             return "Free"
@@ -366,15 +371,25 @@ enum AIModel: String, CaseIterable, Identifiable {
     static func modelsForTier(_ platformTier: String?) -> [AIModel] {
         let isPaid = platformTier == "pro" || platformTier == "team"
         if isPaid {
-            return [.claudeOpus46, .gemini31Pro, .claudeSonnet46, .kimiK25]
+            return [.claudeOpus46, .gemini31Pro, .claudeSonnet46, .codex53, .kimiK25]
         }
         return [
-            .claudeSonnet4, .gemini25Flash, .deepseekChat,
+            .claudeSonnet4, .gemini31Flash, .deepseekChat,
             .qwen3Coder, .deepseekR1, .gptOss120b, .trinityLarge, .step35Flash, .llama33, .glm45Air
         ]
     }
 
     static func defaultForTier(_ platformTier: String?) -> AIModel {
         modelsForTier(platformTier).first ?? .qwen3Coder
+    }
+
+    /// Migrate old model IDs to current ones (for saved conversations).
+    static func migrateLegacyID(_ rawValue: String) -> AIModel? {
+        // Handle renamed Gemini models
+        switch rawValue {
+        case "google/gemini-2.5-pro-preview": return .gemini31Pro
+        case "google/gemini-2.5-flash-preview": return .gemini31Flash
+        default: return AIModel(rawValue: rawValue)
+        }
     }
 }

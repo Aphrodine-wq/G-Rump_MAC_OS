@@ -82,24 +82,38 @@ echo ""
 echo "Build completed in ${BUILD_TIME}s"
 echo "Launching G-Rump (debug mode)..."
 
+# Verify the binary exists
+BINARY_PATH="$BUILD_DIR/debug/GRump"
+if [ ! -x "$BINARY_PATH" ]; then
+    echo "Binary not found at $BINARY_PATH, using swift run..."
+    BINARY_PATH=""
+fi
+
 # Launch the app
 if [ "$AUTO_RESTART" = true ]; then
-    echo "Auto-restart: Watching for file changes..."
-    # Simple file watching loop
+    echo "Auto-restart: Will restart on exit..."
     while true; do
-        exec swift run -c debug --skip-build GRump \
-          --scratch-path "$BUILD_DIR" \
-          --cache-path "$BUILD_DIR/cache" \
-          --config-path "$BUILD_DIR/config" \
-          --security-path "$BUILD_DIR/security"
+        if [ -n "$BINARY_PATH" ]; then
+            "$BINARY_PATH" || true
+        else
+            swift run -c debug --skip-build GRump \
+              --scratch-path "$BUILD_DIR" \
+              --cache-path "$BUILD_DIR/cache" \
+              --config-path "$BUILD_DIR/config" \
+              --security-path "$BUILD_DIR/security" || true
+        fi
         
         echo "App terminated. Restarting in 2 seconds..."
         sleep 2
     done
 else
-    exec swift run -c debug --skip-build GRump \
-      --scratch-path "$BUILD_DIR" \
-      --cache-path "$BUILD_DIR/cache" \
-      --config-path "$BUILD_DIR/config" \
-      --security-path "$BUILD_DIR/security"
+    if [ -n "$BINARY_PATH" ]; then
+        exec "$BINARY_PATH"
+    else
+        exec swift run -c debug GRump \
+          --scratch-path "$BUILD_DIR" \
+          --cache-path "$BUILD_DIR/cache" \
+          --config-path "$BUILD_DIR/config" \
+          --security-path "$BUILD_DIR/security"
+    fi
 fi

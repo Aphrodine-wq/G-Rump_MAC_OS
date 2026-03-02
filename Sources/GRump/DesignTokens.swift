@@ -3,57 +3,83 @@ import SwiftUI
 // MARK: - Typography Scale
 
 enum Typography {
-    // Display
-    static let displayLarge = Font.system(size: 30, weight: .bold, design: .rounded)
-    static let displayMedium = Font.system(size: 24, weight: .bold, design: .rounded)
+    // Display — use .largeTitle / .title for Dynamic Type scaling
+    static let displayLarge = Font.system(.largeTitle, design: .rounded, weight: .bold)
+    static let displayMedium = Font.system(.title, design: .rounded, weight: .bold)
 
-    // Headings
-    static let heading1 = Font.system(size: 22, weight: .bold)
-    static let heading2 = Font.system(size: 18, weight: .bold)
-    static let heading3 = Font.system(size: 16, weight: .semibold)
+    // Headings — use .title2 / .title3 / .headline for scaling
+    static let heading1 = Font.system(.title2, weight: .bold)
+    static let heading2 = Font.system(.title3, weight: .bold)
+    static let heading3 = Font.system(.headline, weight: .semibold)
 
-    // Body
-    static let bodyLarge = Font.system(size: 15)
-    static let body = Font.system(size: 14)
-    static let bodyMedium = Font.system(size: 14, weight: .medium)
-    static let bodySemibold = Font.system(size: 14, weight: .semibold)
-    static let bodySmall = Font.system(size: 13)
-    static let bodySmallMedium = Font.system(size: 13, weight: .medium)
-    static let bodySmallSemibold = Font.system(size: 13, weight: .semibold)
+    // Body — use .body / .callout / .subheadline for scaling
+    static let bodyLarge = Font.system(.body)
+    static let body = Font.system(.subheadline)
+    static let bodyMedium = Font.system(.subheadline, weight: .medium)
+    static let bodySemibold = Font.system(.subheadline, weight: .semibold)
+    static let bodySmall = Font.system(.footnote)
+    static let bodySmallMedium = Font.system(.footnote, weight: .medium)
+    static let bodySmallSemibold = Font.system(.footnote, weight: .semibold)
 
-    // Caption / Metadata
-    static let caption = Font.system(size: 12)
-    static let captionSemibold = Font.system(size: 12, weight: .semibold)
-    static let captionSmall = Font.system(size: 11)
-    static let captionSmallMedium = Font.system(size: 11, weight: .medium)
-    static let captionSmallSemibold = Font.system(size: 11, weight: .semibold)
+    // Caption / Metadata — use .caption / .caption2 for scaling
+    static let caption = Font.system(.caption)
+    static let captionSemibold = Font.system(.caption, weight: .semibold)
+    static let captionSmall = Font.system(.caption2)
+    static let captionSmallMedium = Font.system(.caption2, weight: .medium)
+    static let captionSmallSemibold = Font.system(.caption2, weight: .semibold)
     static let micro = Font.system(size: 10)
     static let microSemibold = Font.system(size: 10, weight: .semibold)
 
     // Sidebar title
-    static let sidebarTitle = Font.system(size: 15, weight: .bold, design: .rounded)
+    static let sidebarTitle = Font.system(.body, design: .rounded, weight: .bold)
 
-    // Code
-    static let codeLarge = Font.system(size: 13, design: .monospaced)
-    static let code = Font.system(size: 12, design: .monospaced)
-    static let codeSmall = Font.system(size: 11, design: .monospaced)
+    // Code — monospaced with relative sizing so they scale with Dynamic Type
+    static let codeLarge = Font.system(.footnote, design: .monospaced)
+    static let code = Font.system(.caption, design: .monospaced)
+    static let codeSmall = Font.system(.caption2, design: .monospaced)
     static let codeMicro = Font.system(size: 10, design: .monospaced)
 
-    // Special
+    // Special — fixed sizes for decorative elements (these don't need Dynamic Type)
     static let splashTitle = Font.system(size: 30, weight: .bold, design: .rounded)
     static let splashSubtitle = Font.system(size: 14, weight: .medium, design: .rounded)
     static let sparkleIcon = Font.system(size: 9, weight: .bold)
-    static let sparkleSubtitle = Font.system(size: 13)
+    static let sparkleSubtitle = Font.system(.footnote)
     static let emptyStateIcon = Font.system(size: 48, weight: .medium)
     static let onboardingIcon = Font.system(size: 54, weight: .semibold)
 
     // Content-size scaled (for user preference: Small / Medium / Large)
     static func bodyScaled(scale: CGFloat) -> Font { .system(size: 14 * scale) }
     static func bodySmallScaled(scale: CGFloat) -> Font { .system(size: 13 * scale) }
-    static func codeScaled(scale: CGFloat) -> Font { .system(size: 12 * scale, design: .monospaced) }
-    static func codeLargeScaled(scale: CGFloat) -> Font { .system(size: 13 * scale, design: .monospaced) }
-    static func codeSmallScaled(scale: CGFloat) -> Font { .system(size: 11 * scale, design: .monospaced) }
+    static func codeScaled(scale: CGFloat) -> Font { resolveCodeFont(size: 12 * scale) }
+    static func codeLargeScaled(scale: CGFloat) -> Font { resolveCodeFont(size: 13 * scale) }
+    static func codeSmallScaled(scale: CGFloat) -> Font { resolveCodeFont(size: 11 * scale) }
     static func captionSmallScaled(scale: CGFloat) -> Font { .system(size: 11 * scale, weight: .medium) }
+
+    /// User-configurable line spacing (stored via @AppStorage("LineSpacing"))
+    static var userLineSpacing: CGFloat {
+        CGFloat(UserDefaults.standard.double(forKey: "LineSpacing")).clamped(to: 0...10, default: 3.0)
+    }
+
+    /// Resolve code font from user preference, falling back to system monospace
+    private static func resolveCodeFont(size: CGFloat) -> Font {
+        let fontName = UserDefaults.standard.string(forKey: "CodeFont") ?? ""
+        if fontName.isEmpty || fontName == "System Mono" {
+            return .system(size: size, design: .monospaced)
+        }
+        #if os(macOS)
+        if NSFont(name: fontName, size: size) != nil {
+            return .custom(fontName, size: size)
+        }
+        #endif
+        return .system(size: size, design: .monospaced)
+    }
+}
+
+private extension CGFloat {
+    func clamped(to range: ClosedRange<CGFloat>, default fallback: CGFloat) -> CGFloat {
+        if self == 0 { return fallback }
+        return Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
+    }
 }
 
 // MARK: - Spacing Scale (4pt base)
@@ -110,4 +136,15 @@ enum Anim {
     static let stagger: Double = 0.05
     /// Bounce / spring-like micro-interaction.
     static let bounce: Double = 0.35
+
+    // MARK: Standard Spring Animations
+
+    /// Default spring for UI transitions (panels, sheets, cards).
+    static let spring = Animation.spring(response: 0.35, dampingFraction: 0.85)
+    /// Snappy spring for button presses and toggles.
+    static let springSnap = Animation.spring(response: 0.25, dampingFraction: 0.75)
+    /// Gentle spring for modal presentations and large movements.
+    static let springGentle = Animation.spring(response: 0.45, dampingFraction: 0.9)
+    /// Bouncy spring for playful interactions (splash, onboarding).
+    static let springBounce = Animation.spring(response: 0.4, dampingFraction: 0.65)
 }

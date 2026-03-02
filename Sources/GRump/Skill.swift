@@ -34,13 +34,23 @@ struct Skill: Identifiable, Equatable {
         "swiftui-migration", "swiftdata", "async-await", "app-store-prep", "privacy-manifest",
         // AI/ML
         "coreml-conversion", "prompt-engineering", "mlx-training",
+        "fine-tuning", "rag-pipeline", "llm-observability", "mcp-server", "ai-agent-design",
         // Business
         "pitch-deck", "technical-dd", "competitive-analysis",
+        "competitive-intel", "product-strategy", "pricing-monetization", "growth-analytics", "cost-optimization",
+        // Security
+        "pentesting", "exploit-analysis", "incident-response", "network-forensics", "reverse-engineering",
+        // Writing & Research
+        "technical-writing",
+        // DevOps & Infrastructure
+        "platform-engineering", "observability", "edge-computing",
         // Specialized
         "regex", "graphql", "terraform", "kubernetes",
         // Cross-platform stacks
         "react-nextjs", "python-fastapi", "rust-systems", "flutter-dart",
-        "unity-gamedev", "data-science", "aws-serverless", "system-design"
+        "unity-gamedev", "data-science", "aws-serverless", "system-design",
+        // Combo skills
+        "combo-architect", "combo-deep-dive", "combo-red-team", "combo-ship-it", "combo-teacher", "combo-war-room"
     ]
 
     enum Scope: String {
@@ -48,6 +58,244 @@ struct Skill: Identifiable, Equatable {
         case project
         case builtIn
     }
+
+    // MARK: - Context-Aware Relevance
+
+    /// Calculate relevance score for a given context (user message + file types in working directory).
+    func relevanceScore(for query: String, fileExtensions: Set<String> = []) -> Double {
+        let lower = query.lowercased()
+        var score = 0.0
+
+        // Keyword matching against skill name and description
+        let nameWords = name.lowercased().components(separatedBy: .whitespaces)
+        let descWords = description.lowercased().components(separatedBy: .whitespaces)
+        let queryWords = Set(lower.components(separatedBy: .whitespaces))
+
+        let nameOverlap = Set(nameWords).intersection(queryWords).count
+        score += Double(nameOverlap) * 0.3
+
+        let descOverlap = Set(descWords).intersection(queryWords).count
+        score += Double(descOverlap) * 0.15
+
+        // File extension matching
+        let extensionKeywords = Skill.extensionToKeywords
+        for ext in fileExtensions {
+            if let keywords = extensionKeywords[ext] {
+                for keyword in keywords {
+                    if name.lowercased().contains(keyword) || description.lowercased().contains(keyword) {
+                        score += 0.25
+                    }
+                }
+            }
+        }
+
+        // Body keyword matches (lighter weight)
+        let bodyLower = body.lowercased()
+        for word in queryWords where word.count > 3 {
+            if bodyLower.contains(word) { score += 0.05 }
+        }
+
+        return min(1.0, score)
+    }
+
+    /// Map file extensions to relevant skill keywords.
+    private static let extensionToKeywords: [String: [String]] = [
+        ".swift": ["swift", "ios", "swiftui", "swiftdata", "xcode"],
+        ".ts": ["typescript", "react", "next", "node"],
+        ".tsx": ["react", "typescript", "next"],
+        ".js": ["javascript", "react", "node", "next"],
+        ".jsx": ["react", "javascript"],
+        ".py": ["python", "fastapi", "django", "data"],
+        ".rs": ["rust", "systems"],
+        ".go": ["go", "golang"],
+        ".dart": ["flutter", "dart"],
+        ".tf": ["terraform", "infrastructure"],
+        ".yml": ["ci-cd", "docker", "kubernetes"],
+        ".yaml": ["ci-cd", "docker", "kubernetes"],
+        ".dockerfile": ["docker", "devops"],
+        ".graphql": ["graphql", "api"],
+        ".sql": ["database", "sql"],
+        ".cs": ["unity", "csharp"],
+    ]
+}
+
+// MARK: - Skill Pack
+
+struct SkillPack: Identifiable, Codable, Equatable {
+    let id: String
+    let name: String
+    let description: String
+    let skillBaseIds: [String]
+    let icon: String
+
+    /// Enable all skills in this pack.
+    func enable(allSkills: [Skill]) {
+        var allowlist = SkillsSettingsStorage.loadAllowlist()
+        for skill in allSkills where skillBaseIds.contains(skill.baseId) {
+            allowlist.insert(skill.id)
+        }
+        SkillsSettingsStorage.saveAllowlist(allowlist)
+    }
+
+    /// Disable all skills in this pack.
+    func disable(allSkills: [Skill]) {
+        var allowlist = SkillsSettingsStorage.loadAllowlist()
+        for skill in allSkills where skillBaseIds.contains(skill.baseId) {
+            allowlist.remove(skill.id)
+        }
+        SkillsSettingsStorage.saveAllowlist(allowlist)
+    }
+
+    /// Built-in skill packs.
+    static let builtInPacks: [SkillPack] = [
+        SkillPack(
+            id: "ios-dev",
+            name: "iOS Development",
+            description: "Swift, SwiftUI, SwiftData, App Store prep, accessibility",
+            skillBaseIds: ["swift-ios", "swiftui-migration", "swiftdata", "app-store-prep", "accessibility", "async-await", "privacy-manifest"],
+            icon: "apple.logo"
+        ),
+        SkillPack(
+            id: "full-stack-web",
+            name: "Full Stack Web",
+            description: "React/Next.js, TypeScript, API design, databases",
+            skillBaseIds: ["react-nextjs", "api-design", "database-design", "graphql"],
+            icon: "globe"
+        ),
+        SkillPack(
+            id: "devops",
+            name: "DevOps & Infrastructure",
+            description: "Docker, CI/CD, Terraform, Kubernetes, monitoring",
+            skillBaseIds: ["devops", "docker-deploy", "ci-cd", "terraform", "kubernetes", "aws-serverless", "platform-engineering", "observability"],
+            icon: "server.rack"
+        ),
+        SkillPack(
+            id: "code-quality",
+            name: "Code Quality",
+            description: "Testing, code review, refactoring, documentation",
+            skillBaseIds: ["testing", "code-review", "refactoring", "documentation", "security-audit", "performance"],
+            icon: "checkmark.shield"
+        ),
+        SkillPack(
+            id: "ai-ml",
+            name: "AI & Machine Learning",
+            description: "CoreML, prompt engineering, MLX, RAG pipelines, fine-tuning",
+            skillBaseIds: ["coreml-conversion", "prompt-engineering", "mlx-training", "fine-tuning", "rag-pipeline", "llm-observability", "ai-agent-design"],
+            icon: "brain"
+        ),
+        SkillPack(
+            id: "data-engineering",
+            name: "Data Engineering",
+            description: "Data science, databases, RAG pipelines, analytics",
+            skillBaseIds: ["data-science", "database-design", "rag-pipeline", "growth-analytics"],
+            icon: "cylinder.split.1x2"
+        ),
+        SkillPack(
+            id: "mobile-cross-platform",
+            name: "Mobile Cross-Platform",
+            description: "Flutter/Dart, React Native, Swift iOS — build for every screen",
+            skillBaseIds: ["flutter-dart", "react-nextjs", "swift-ios", "swiftui-migration"],
+            icon: "iphone.and.arrow.forward"
+        ),
+        SkillPack(
+            id: "game-dev",
+            name: "Game Development",
+            description: "Unity, system design, performance optimization",
+            skillBaseIds: ["unity-gamedev", "system-design", "performance"],
+            icon: "gamecontroller"
+        ),
+        SkillPack(
+            id: "security-compliance",
+            name: "Security & Compliance",
+            description: "Pentesting, exploit analysis, incident response, privacy",
+            skillBaseIds: ["security-audit", "privacy-manifest", "pentesting", "exploit-analysis", "incident-response", "network-forensics", "reverse-engineering"],
+            icon: "lock.shield"
+        ),
+        SkillPack(
+            id: "research-writing",
+            name: "Research & Writing",
+            description: "Technical writing, documentation, research, competitive intel",
+            skillBaseIds: ["research", "writing", "documentation", "technical-writing", "competitive-intel"],
+            icon: "text.book.closed"
+        ),
+        SkillPack(
+            id: "startup-business",
+            name: "Startup & Business",
+            description: "Pitch decks, due diligence, competitive analysis, pricing, growth",
+            skillBaseIds: ["pitch-deck", "technical-dd", "competitive-analysis", "product-strategy", "pricing-monetization", "growth-analytics", "cost-optimization"],
+            icon: "chart.line.uptrend.xyaxis"
+        ),
+        SkillPack(
+            id: "backend-apis",
+            name: "Backend & APIs",
+            description: "API design, Python/FastAPI, GraphQL, database architecture",
+            skillBaseIds: ["api-design", "python-fastapi", "graphql", "database-design"],
+            icon: "arrow.left.arrow.right"
+        ),
+        SkillPack(
+            id: "cloud-serverless",
+            name: "Cloud & Serverless",
+            description: "AWS Lambda, Terraform, edge computing, containerized deploys",
+            skillBaseIds: ["aws-serverless", "terraform", "edge-computing", "docker-deploy"],
+            icon: "cloud"
+        ),
+        SkillPack(
+            id: "rust-systems",
+            name: "Rust & Systems",
+            description: "Rust, systems programming, architecture, performance tuning",
+            skillBaseIds: ["rust-systems", "system-design", "performance"],
+            icon: "cpu"
+        ),
+        SkillPack(
+            id: "debugging-troubleshooting",
+            name: "Debugging & Troubleshooting",
+            description: "Debugging, testing, observability, incident response",
+            skillBaseIds: ["debugging", "testing", "observability", "incident-response"],
+            icon: "ant"
+        ),
+        SkillPack(
+            id: "code-modernization",
+            name: "Code Migration & Modernization",
+            description: "Legacy migration, refactoring, SwiftUI migration, monorepo strategy",
+            skillBaseIds: ["code-migration", "refactoring", "swiftui-migration", "monorepo"],
+            icon: "arrow.triangle.2.circlepath"
+        ),
+        SkillPack(
+            id: "rapid-prototyping",
+            name: "Rapid Prototyping",
+            description: "Ship fast — full-stack scaffolding, React, Flutter, quick iteration",
+            skillBaseIds: ["rapid-prototype", "full-stack", "react-nextjs", "flutter-dart"],
+            icon: "bolt.fill"
+        ),
+        SkillPack(
+            id: "mcp-agents",
+            name: "MCP & Agent Building",
+            description: "Build MCP servers, design AI agents, prompt craft, LLM monitoring",
+            skillBaseIds: ["mcp-server", "ai-agent-design", "prompt-engineering", "llm-observability"],
+            icon: "puzzlepiece.extension"
+        ),
+        SkillPack(
+            id: "red-team",
+            name: "Red Team & Offensive",
+            description: "Pentesting, exploit analysis, reverse engineering, network forensics",
+            skillBaseIds: ["pentesting", "exploit-analysis", "reverse-engineering", "network-forensics"],
+            icon: "shield.lefthalf.filled.slash"
+        ),
+        SkillPack(
+            id: "combo-workflows",
+            name: "Combo Workflows",
+            description: "Pre-built multi-skill combos: architect, deep-dive, red-team, ship-it, teacher, war-room",
+            skillBaseIds: ["combo-architect", "combo-deep-dive", "combo-red-team", "combo-ship-it", "combo-teacher", "combo-war-room"],
+            icon: "square.stack.3d.up"
+        ),
+        SkillPack(
+            id: "strategic-intel",
+            name: "Strategic Intelligence",
+            description: "Competitive intel, market analysis, product strategy, cost optimization",
+            skillBaseIds: ["competitive-intel", "competitive-analysis", "product-strategy", "cost-optimization", "technical-dd"],
+            icon: "binoculars"
+        ),
+    ]
 }
 
 /// Loads skills from ~/.grump/skills/ and project .grump/skills/.
@@ -55,7 +303,7 @@ enum SkillsStorage {
     private static let skillFileName = "SKILL.md"
 
     static var globalSkillsDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".grump")
             .appendingPathComponent("skills")
     }

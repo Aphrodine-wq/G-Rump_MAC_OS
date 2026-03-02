@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
 	<key>NSHighResolutionCapable</key>
@@ -34,17 +36,7 @@
 	<string>Copyright © 2026 G-Rump. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<!-- Replace with your reversed iOS client ID, e.g. com.googleusercontent.apps.123456789-xxxxx -->
-				<string>com.googleusercontent.apps.YOUR_CLIENT_ID</string>
-			</array>
-		</dict>
-	</array>
+	<!-- Google OAuth CFBundleURLTypes: add CFBundleURLSchemes with reversed client ID when obtained -->
+
 </dict>
 </plist>

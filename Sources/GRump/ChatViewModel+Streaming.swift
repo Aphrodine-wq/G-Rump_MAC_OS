@@ -12,6 +12,12 @@ extension ChatViewModel {
             return
         }
 
+        // Check connectivity before attempting to stream
+        if !ConnectionMonitor.shared.canStream {
+            errorMessage = "You appear to be offline. Check your internet connection and try again."
+            return
+        }
+
         let userMessage = Message(role: .user, content: trimmed)
         currentConversation?.messages.append(userMessage)
         currentConversation?.updateTitle()
@@ -56,11 +62,22 @@ extension ChatViewModel {
         parallelAgents = []
         orchestrationPlan = nil
         synthesisingContent = ""
+        speculativeBranches = []
+        speculativeWinnerIndex = nil
+        currentRunCodeChanges = []
+
+        // Load temporal intelligence and intent continuity for this run
+        Task {
+            await TemporalCodeIntelligenceService.shared.analyze(workingDirectory: workingDirectory)
+        }
+        intentContinuity.load(workingDirectory: workingDirectory)
 
         streamTask?.cancel()
         streamTask = Task {
             if self.agentMode == .parallel {
                 await self.runParallelAgentLoop(userTask: task)
+            } else if self.agentMode == .speculative {
+                await self.runSpeculativeBranchLoop(userTask: task)
             } else if self.agentMode == .standard && isSimpleConversationalMessage(task) {
                 await self.runFastReply()
             } else {
@@ -110,6 +127,68 @@ extension ChatViewModel {
             await self.runAgentLoop()
             streamTask = nil
             isLoading = false
+        }
+    }
+
+    // MARK: - OpenClaw Message Handling
+
+    /// Process an incoming message from the OpenClaw gateway.
+    /// Routes it through the normal agent loop and streams the response back.
+    func handleOpenClawMessage(sessionId: String, content: String, model: String?) async {
+        // Don't interrupt an active generation
+        guard !isLoading else {
+            await OpenClawService.shared.sendResponse(
+                sessionId: sessionId,
+                content: "G-Rump is busy with another task. Please wait.",
+                done: true
+            )
+            return
+        }
+
+        activeOpenClawSessionId = sessionId
+
+        // Inject the message into the conversation
+        let userMessage = Message(role: .user, content: content)
+        if currentConversation == nil { createNewConversation() }
+        currentConversation?.messages.append(userMessage)
+        currentConversation?.updateTitle()
+        syncConversation()
+
+        // If the caller requested a specific model, try to select it
+        if let modelId = model, let aiModel = AIModel(rawValue: modelId) {
+            selectedModel = aiModel
+        }
+
+        // Run the agent loop (reuses the same streaming pipeline as normal chat)
+        isLoading = true
+        isPaused = false
+        errorMessage = nil
+        streamingContent = ""
+        activeToolCalls = []
+        currentRunCodeChanges = []
+
+        streamTask?.cancel()
+        streamTask = Task {
+            await self.runAgentLoop()
+            streamTask = nil
+            isLoading = false
+
+            // Send the final assistant response back to OpenClaw
+            let responseContent: String
+            if let lastAssistant = self.currentConversation?.messages.last(where: { $0.role == .assistant }) {
+                responseContent = lastAssistant.content
+            } else if let err = self.errorMessage {
+                responseContent = "Error: \(err)"
+            } else {
+                responseContent = "No response generated."
+            }
+
+            await OpenClawService.shared.sendResponse(
+                sessionId: sessionId,
+                content: responseContent,
+                done: true
+            )
+            self.activeOpenClawSessionId = nil
         }
     }
 }

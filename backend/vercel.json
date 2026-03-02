@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "buildCommand": "npm install",
+  "outputDirectory": ".",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/prune",
+      "schedule": "0 3 * * *"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

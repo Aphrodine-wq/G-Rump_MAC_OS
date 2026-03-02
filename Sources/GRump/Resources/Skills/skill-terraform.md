@@ -1,6 +1,7 @@
 ---
 name: Terraform IaC
 description: Design and manage infrastructure as code with Terraform, including modules, state, and CI/CD.
+tags: [terraform, infrastructure-as-code, cloud, aws, gcp, modules]
 ---
 
 # Terraform IaC

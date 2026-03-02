@@ -1,6 +1,7 @@
 ---
-name: system-design
-description: System design and architecture for scalable distributed systems
+name: System Design
+description: System design and architecture for scalable distributed systems.
+tags: [system-design, architecture, distributed-systems, scalability, reliability]
 ---
 
 You are an expert in system design, distributed systems, and scalable architecture.

@@ -13,7 +13,7 @@ struct RightPanelSidebar: View {
         VStack(spacing: 0) {
             // Primary panels (top group)
             VStack(spacing: Spacing.xs) {
-                ForEach([PanelTab.chat, .files, .git, .tests, .terminal], id: \.self) { tab in
+                ForEach([PanelTab.chat, .files, .git, .tests, .terminal, .memory], id: \.self) { tab in
                     panelButton(tab)
                 }
             }

@@ -138,6 +138,8 @@ class MultiProviderAIService: ObservableObject {
             return streamOpenAI(messages: messages, model: model, config: config, tools: tools)
         case .anthropic:
             return streamAnthropic(messages: messages, model: model, config: config, tools: tools)
+        case .google:
+            return streamGoogle(messages: messages, model: model, config: config, tools: tools)
         case .ollama:
             return streamOllama(messages: messages, model: model, config: config, tools: tools)
         case .onDevice:
@@ -272,8 +274,47 @@ class MultiProviderAIService: ObservableObject {
         }
     }
     
+    // MARK: - Google Gemini Streaming
+
+    nonisolated private func streamGoogle(
+        messages: [Message],
+        model: EnhancedAIModel,
+        config: ProviderConfiguration,
+        tools: [[String: Any]]?
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        return AsyncThrowingStream<StreamEvent, Error> { continuation in
+            Task {
+                do {
+                    let request = try buildGoogleRequest(
+                        messages: messages,
+                        model: model.modelID,
+                        apiKey: config.apiKey ?? "",
+                        baseURL: config.baseURL ?? model.provider.defaultBaseURL,
+                        tools: tools,
+                        maxOutputTokens: model.maxOutput
+                    )
+
+                    let (bytes, response) = try await StreamingNetwork.session.bytes(for: request)
+
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw AIServiceError.networkError
+                    }
+
+                    guard httpResponse.statusCode == 200 else {
+                        throw AIServiceError.apiError(httpResponse.statusCode)
+                    }
+
+                    try await SSELineParser.parseGoogleSSE(bytes: bytes, continuation: continuation)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
     // MARK: - On-Device (Core ML) Streaming
-    
+
     private func streamOnDevice(
         messages: [Message],
         model: EnhancedAIModel
@@ -376,6 +417,67 @@ class MultiProviderAIService: ObservableObject {
         return request
     }
     
+    nonisolated private func buildGoogleRequest(
+        messages: [Message],
+        model: String,
+        apiKey: String,
+        baseURL: String,
+        tools: [[String: Any]]?,
+        maxOutputTokens: Int
+    ) throws -> URLRequest {
+        let cleanBase = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(cleanBase)/models/\(model):streamGenerateContent?alt=sse&key=\(apiKey)") else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Convert messages to Gemini contents format
+        var contents: [[String: Any]] = []
+        var systemInstruction: [String: Any]?
+
+        for message in messages {
+            if message.role == .system {
+                systemInstruction = ["parts": [["text": message.content]]]
+                continue
+            }
+            let role = message.role == .assistant ? "model" : "user"
+            contents.append([
+                "role": role,
+                "parts": [["text": message.content]]
+            ])
+        }
+
+        var body: [String: Any] = [
+            "contents": contents,
+            "generationConfig": [
+                "temperature": 0.7,
+                "maxOutputTokens": maxOutputTokens,
+            ]
+        ]
+        if let sys = systemInstruction {
+            body["systemInstruction"] = sys
+        }
+
+        // Convert tools to Gemini function declarations
+        if let tools = tools, !tools.isEmpty {
+            var functionDeclarations: [[String: Any]] = []
+            for tool in tools {
+                if let function = tool["function"] as? [String: Any] {
+                    functionDeclarations.append(function)
+                }
+            }
+            if !functionDeclarations.isEmpty {
+                body["tools"] = [["functionDeclarations": functionDeclarations]]
+            }
+        }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
+    }
+
     // MARK: - Message Converters
     
     nonisolated private func openAIMessage(from message: Message) -> OpenAIMessage {
@@ -424,10 +526,11 @@ class MultiProviderAIService: ObservableObject {
     }
     
     nonisolated private func anthropicTool(from tool: [String: Any]) -> AnthropicTool {
+        let fn = tool["function"] as? [String: Any] ?? [:]
         return AnthropicTool(
-            name: tool["function"] as? String ?? "",
-            description: tool["description"] as? String ?? "",
-            inputSchema: tool["parameters"] as? [String: Any] ?? [:]
+            name: fn["name"] as? String ?? "",
+            description: fn["description"] as? String ?? "",
+            inputSchema: fn["parameters"] as? [String: Any] ?? [:]
         )
     }
 }

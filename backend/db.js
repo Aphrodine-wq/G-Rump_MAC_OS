@@ -1,39 +1,65 @@
-import Database from 'better-sqlite3';
-import { mkdirSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { createClient } from '@libsql/client';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = process.env.DATABASE_PATH || join(__dirname, 'data', 'grump.db');
+// Turso / libSQL client — works both locally (file:) and hosted (libsql://)
+// Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN for hosted Turso.
+// Falls back to local SQLite file for development.
+const url = process.env.TURSO_DATABASE_URL || 'file:data/grump.db';
+const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
 
-let db;
+let client;
 
-export function getDb() {
-  if (!db) {
-    const dataDir = dirname(dbPath);
-    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    initSchema(db);
+export function getClient() {
+  if (!client) {
+    client = createClient({ url, authToken });
   }
-  return db;
+  return client;
 }
 
-function initSchema(database) {
-  let needsMigration = false;
-  try {
-    const columns = database.prepare("PRAGMA table_info(users)").all();
-    const hasGoogleId = columns.some(c => c.name === 'google_id');
-    needsMigration = columns.length > 0 && !hasGoogleId;
-  } catch {
-    needsMigration = true;
-  }
+// Thin async wrapper around @libsql/client to minimize changes to existing code.
+// Usage:  const db = getDb();
+//         const row = await db.get('SELECT ... WHERE id = ?', [id]);
+//         const rows = await db.all('SELECT ...', []);
+//         await db.run('INSERT ...', [val1, val2]);
+//         await db.exec('CREATE TABLE ...');
+export function getDb() {
+  const c = getClient();
+  return {
+    async get(sql, args = []) {
+      const result = await c.execute({ sql, args });
+      return result.rows[0] ?? null;
+    },
+    async all(sql, args = []) {
+      const result = await c.execute({ sql, args });
+      return result.rows;
+    },
+    async run(sql, args = []) {
+      const result = await c.execute({ sql, args });
+      return { changes: result.rowsAffected };
+    },
+    async exec(sql) {
+      // exec can contain multiple statements separated by semicolons.
+      // @libsql/client's executeMultiple handles this.
+      await c.executeMultiple(sql);
+    },
+  };
+}
 
-  if (needsMigration) {
-    database.exec(`DROP TABLE IF EXISTS users`);
-  }
+export async function initDatabase() {
+  const db = getDb();
 
-  database.exec(`
+  // Enable foreign key enforcement
+  await db.exec('PRAGMA foreign_keys = ON;');
+
+  // Migration tracking table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT,
+      applied_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       google_id TEXT UNIQUE NOT NULL,
@@ -44,10 +70,13 @@ function initSchema(database) {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+  `);
+
+  await db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
   `);
 
-  database.exec(`
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS usage_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
@@ -58,21 +87,69 @@ function initSchema(database) {
       created_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
+  `);
+
+  await db.exec(`
     CREATE INDEX IF NOT EXISTS idx_usage_log_user ON usage_log(user_id);
   `);
 
-  migrateProfileColumns(database);
+  // Additional indexes for query performance
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_usage_log_created ON usage_log(created_at);');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_usage_log_user_created ON usage_log(user_id, created_at);');
+
+  await migrateProfileColumns(db);
+  await migrateStripeColumns(db);
+  await migrateCreditPurchasesTable(db);
 }
 
-function migrateProfileColumns(database) {
-  const columns = database.prepare("PRAGMA table_info(users)").all();
+async function migrateProfileColumns(db) {
+  const columns = await db.all("PRAGMA table_info(users)");
   const names = new Set(columns.map(c => c.name));
   if (!names.has('display_name')) {
-    database.exec('ALTER TABLE users ADD COLUMN display_name TEXT');
+    await db.exec('ALTER TABLE users ADD COLUMN display_name TEXT');
   }
   if (!names.has('avatar_url')) {
-    database.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+    await db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
   }
+}
+
+async function migrateStripeColumns(db) {
+  const columns = await db.all("PRAGMA table_info(users)");
+  const names = new Set(columns.map(c => c.name));
+  if (!names.has('stripe_customer_id')) {
+    await db.exec('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT');
+  }
+  if (!names.has('stripe_subscription_id')) {
+    await db.exec('ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT');
+  }
+  if (!names.has('subscription_status')) {
+    await db.exec('ALTER TABLE users ADD COLUMN subscription_status TEXT');
+  }
+  if (!names.has('subscription_period_end')) {
+    await db.exec('ALTER TABLE users ADD COLUMN subscription_period_end INTEGER');
+  }
+  if (!names.has('trial_end')) {
+    await db.exec('ALTER TABLE users ADD COLUMN trial_end INTEGER');
+  }
+}
+
+async function migrateCreditPurchasesTable(db) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS credit_purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      pack_key TEXT NOT NULL,
+      credits_added INTEGER NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      stripe_session_id TEXT,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
+
+  await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_credit_purchases_user ON credit_purchases(user_id);
+  `);
 }
 
 export const TIERS = {

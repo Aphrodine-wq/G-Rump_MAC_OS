@@ -96,9 +96,9 @@ struct GRumpShortcutsProvider: AppShortcutsProvider {
         AppShortcut(
             intent: AskGRumpIntent(),
             phrases: [
-                "Ask \(.applicationName) \(\.$prompt)",
-                "Ask \(.applicationName) about \(\.$prompt)",
-                "\(.applicationName) \(\.$prompt)"
+                "Ask \(.applicationName) a question",
+                "Ask \(.applicationName) something",
+                "Send a prompt to \(.applicationName)"
             ],
             shortTitle: "Ask G-Rump",
             systemImageName: "brain.head.profile"
@@ -115,8 +115,8 @@ struct GRumpShortcutsProvider: AppShortcutsProvider {
         AppShortcut(
             intent: RunAgentTaskIntent(),
             phrases: [
-                "Run \(.applicationName) agent on \(\.$taskDescription)",
-                "\(.applicationName) agent \(\.$taskDescription)"
+                "Run \(.applicationName) agent task",
+                "\(.applicationName) run agent"
             ],
             shortTitle: "Run Agent Task",
             systemImageName: "bolt.circle"

@@ -7,7 +7,7 @@ extension ToolDefinitions {
 
     // MARK: - File Operations
 
-    static let readFile: [String: Any] = [
+    nonisolated(unsafe) static let readFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "read_file",
@@ -33,7 +33,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let batchReadFiles: [String: Any] = [
+    nonisolated(unsafe) static let batchReadFiles: [String: Any] = [
         "type": "function",
         "function": [
             "name": "batch_read_files",
@@ -52,7 +52,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let writeFile: [String: Any] = [
+    nonisolated(unsafe) static let writeFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "write_file",
@@ -74,7 +74,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let editFile: [String: Any] = [
+    nonisolated(unsafe) static let editFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "edit_file",
@@ -100,7 +100,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let createFile: [String: Any] = [
+    nonisolated(unsafe) static let createFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "create_file",
@@ -122,7 +122,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let deleteFile: [String: Any] = [
+    nonisolated(unsafe) static let deleteFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "delete_file",
@@ -140,7 +140,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let moveFile: [String: Any] = [
+    nonisolated(unsafe) static let moveFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "move_file",
@@ -156,7 +156,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let copyFile: [String: Any] = [
+    nonisolated(unsafe) static let copyFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "copy_file",
@@ -173,7 +173,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let fileInfo: [String: Any] = [
+    nonisolated(unsafe) static let fileInfo: [String: Any] = [
         "type": "function",
         "function": [
             "name": "file_info",
@@ -188,7 +188,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let pathExists: [String: Any] = [
+    nonisolated(unsafe) static let pathExists: [String: Any] = [
         "type": "function",
         "function": [
             "name": "path_exists",
@@ -203,7 +203,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let countLines: [String: Any] = [
+    nonisolated(unsafe) static let countLines: [String: Any] = [
         "type": "function",
         "function": [
             "name": "count_lines",
@@ -220,7 +220,7 @@ extension ToolDefinitions {
 
     // MARK: - Directory & Search
 
-    static let listDirectory: [String: Any] = [
+    nonisolated(unsafe) static let listDirectory: [String: Any] = [
         "type": "function",
         "function": [
             "name": "list_directory",
@@ -246,7 +246,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let treeView: [String: Any] = [
+    nonisolated(unsafe) static let treeView: [String: Any] = [
         "type": "function",
         "function": [
             "name": "tree_view",
@@ -268,7 +268,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let searchFiles: [String: Any] = [
+    nonisolated(unsafe) static let searchFiles: [String: Any] = [
         "type": "function",
         "function": [
             "name": "search_files",
@@ -290,7 +290,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let grepSearch: [String: Any] = [
+    nonisolated(unsafe) static let grepSearch: [String: Any] = [
         "type": "function",
         "function": [
             "name": "grep_search",
@@ -320,7 +320,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let findAndReplace: [String: Any] = [
+    nonisolated(unsafe) static let findAndReplace: [String: Any] = [
         "type": "function",
         "function": [
             "name": "find_and_replace",
@@ -354,7 +354,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let appendFile: [String: Any] = [
+    nonisolated(unsafe) static let appendFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "append_file",
@@ -370,7 +370,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let createDirectory: [String: Any] = [
+    nonisolated(unsafe) static let createDirectory: [String: Any] = [
         "type": "function",
         "function": [
             "name": "create_directory",
@@ -385,7 +385,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let compressFiles: [String: Any] = [
+    nonisolated(unsafe) static let compressFiles: [String: Any] = [
         "type": "function",
         "function": [
             "name": "compress_files",
@@ -401,7 +401,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let extractArchive: [String: Any] = [
+    nonisolated(unsafe) static let extractArchive: [String: Any] = [
         "type": "function",
         "function": [
             "name": "extract_archive",

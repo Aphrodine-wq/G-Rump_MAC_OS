@@ -83,25 +83,25 @@ enum ModelRouter {
     static func fallbackChain(for taskType: TaskType, fallback: AIModel) -> [AIModel] {
         switch taskType {
         case .reasoning, .planning:
-            return [.deepseekR1, .gemini25Flash, .claudeSonnet4, fallback]
+            return [.deepseekR1, .gemini31Flash, .claudeSonnet4, fallback]
 
         case .debugging:
             return [.deepseekR1, .qwen3Coder, .claudeSonnet4, fallback]
 
         case .fileOps, .search:
-            return [.gemini25Flash, .qwen3Coder, .deepseekChat, fallback]
+            return [.gemini31Flash, .qwen3Coder, .deepseekChat, fallback]
 
         case .codeGen, .testing:
             return [.qwen3Coder, .deepseekR1, .claudeSonnet4, fallback]
 
         case .synthesis, .writing:
-            return [.claudeSonnet4, .gemini25Flash, .deepseekR1, fallback]
+            return [.claudeSonnet4, .gemini31Flash, .deepseekR1, fallback]
 
         case .web, .research:
-            return [.gemini25Flash, .claudeSonnet4, .deepseekChat, fallback]
+            return [.gemini31Flash, .claudeSonnet4, .deepseekChat, fallback]
 
         case .general:
-            return [fallback, .qwen3Coder, .gemini25Flash]
+            return [fallback, .qwen3Coder, .gemini31Flash]
         }
     }
 

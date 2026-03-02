@@ -276,6 +276,7 @@ extension PanelTab {
         case .terminal: return "Integrated terminal sessions"
         case .appstore: return "App Store submission checklist"
         case .accessibility: return "Accessibility audit & suggestions"
+        case .memory: return "Browse & search persistent memory store"
         }
     }
 }

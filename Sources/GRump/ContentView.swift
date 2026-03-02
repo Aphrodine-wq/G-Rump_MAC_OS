@@ -14,6 +14,7 @@ struct ContentView: View {
     @EnvironmentObject var ambientService: AmbientCodeAwarenessService
     @StateObject private var state = ContentViewState()
     @FocusState private var messageFieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         bodyContent
@@ -31,8 +32,11 @@ struct ContentView: View {
                         state.lspService.start(workspaceRoot: viewModel.workingDirectory)
                     }
                 }
-                // Index all conversations in Spotlight on launch
-                SpotlightIndexer.shared.indexAllConversations(viewModel.conversations)
+                // Index all conversations in Spotlight on launch (off main thread)
+                let conversations = viewModel.conversations
+                Task.detached(priority: .background) {
+                    await SpotlightIndexer.shared.indexAllConversations(conversations)
+                }
             }
             // Handoff: advertise current conversation activity
             .userActivity(GRumpActivityType.conversation) { activity in
@@ -276,20 +280,23 @@ struct ContentView: View {
                         Text(mode.displayName)
                             .font(Typography.captionSmallSemibold)
                     }
-                    .foregroundColor(isSelected ? themeManager.palette.effectiveAccent : themeManager.palette.textSecondary)
+                    .foregroundColor(isSelected ? mode.modeAccentColor : themeManager.palette.textSecondary)
                     .padding(.horizontal, Spacing.lg)
                     .padding(.vertical, Spacing.sm)
                     .background(
                         RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .fill(isSelected ? themeManager.palette.effectiveAccent.opacity(0.12) : themeManager.palette.bgInput)
+                            .fill(isSelected ? mode.modeAccentColor.opacity(0.12) : themeManager.palette.bgInput)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .stroke(isSelected ? themeManager.palette.effectiveAccent.opacity(0.5) : Color.clear, lineWidth: isSelected ? 2 : 0)
+                            .stroke(isSelected ? mode.modeAccentColor.opacity(0.5) : Color.clear, lineWidth: isSelected ? 2 : 0)
                     )
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .help(mode.description)
+                .accessibilityLabel("\(mode.displayName) mode")
+                .accessibilityHint(mode.description)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
         .frame(maxWidth: .infinity)
@@ -325,6 +332,7 @@ struct ContentView: View {
                             .foregroundColor(themeManager.palette.effectiveAccent)
                     }
                     .buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel("Undo send")
                 }
                 .padding(.horizontal, Spacing.huge)
                 .padding(.vertical, Spacing.lg)
@@ -448,6 +456,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Threads & Branches")
+                    .accessibilityLabel("Toggle thread navigation")
                 }
                 .padding(.horizontal, Spacing.huge)
                 .padding(.vertical, Spacing.sm)
@@ -619,7 +628,7 @@ struct ContentView: View {
                     .padding(.vertical, Spacing.md)
                 }
                 .buttonStyle(.plain)
-                .help(state.toolCallsBarExpanded ? "Collapse" : "Expand")
+                .accessibilityLabel("Toggle tool calls detail, \(tools.count) tools, \(runningCount) running, \(completedCount) done")
             }
             
             if state.toolCallsBarExpanded || tools.count <= 1 {
@@ -904,7 +913,7 @@ struct MessageRow: View {
 
     private var modeMood: LogoMood {
         switch agentMode {
-        case .standard, .parallel: return .neutral
+        case .standard, .parallel, .speculative: return .neutral
         case .plan: return .thinking
         case .fullStack: return .happy
         case .argue: return .error  // grumpy/angry face
@@ -1249,12 +1258,13 @@ struct GRumpStreamingBubble: View {
         case .fullStack: return "Build"
         case .argue: return "Debate"
         case .spec: return "Spec"
+        case .speculative: return "Explore"
         }
     }
 
     private var modeMood: LogoMood {
         switch agentMode {
-        case .standard, .parallel: return .neutral
+        case .standard, .parallel, .speculative: return .neutral
         case .plan: return .thinking
         case .fullStack: return .happy
         case .argue: return .error

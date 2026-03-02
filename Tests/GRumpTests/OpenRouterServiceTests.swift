@@ -37,4 +37,153 @@ final class OpenRouterServiceTests: XCTestCase {
             XCTAssertTrue(error is OpenRouterService.ServiceError)
         }
     }
+
+    // MARK: - Request Headers
+
+    func testBuildRequestHasContentTypeHeader() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Hi")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: false)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+    }
+
+    func testBuildRequestHasRefererHeader() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Hi")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: false)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "HTTP-Referer"), "https://grump.app")
+    }
+
+    func testBuildRequestHasPlatformHeader() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Hi")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: false)
+        #if os(macOS)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Client-Platform"), "macos-native")
+        #else
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Client-Platform"), "ios-native")
+        #endif
+    }
+
+    // MARK: - Request Body
+
+    func testBuildRequestStreamFalse() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Test")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: false)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["stream"] as? Bool, false)
+    }
+
+    func testBuildRequestContainsMaxTokens() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Test")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "test/model", stream: true)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNotNil(json["max_tokens"])
+    }
+
+    func testBuildRequestContainsTemperature() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Test")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "test/model", stream: true)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNotNil(json["temperature"])
+    }
+
+    func testBuildRequestContainsToolChoice() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Test")]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: true)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["tool_choice"] as? String, "auto")
+    }
+
+    // MARK: - Message Serialization
+
+    func testAssistantMessageWithToolCallsSerialized() throws {
+        let service = OpenRouterService()
+        var msg = Message(role: .assistant, content: "")
+        msg.toolCalls = [ToolCall(id: "tc1", name: "read_file", arguments: "{\"path\":\"/test\"}")]
+        let messages = [msg]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: false)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let msgs = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertEqual(msgs.count, 1)
+        XCTAssertNotNil(msgs[0]["tool_calls"])
+    }
+
+    func testToolMessageSerialized() throws {
+        let service = OpenRouterService()
+        var msg = Message(role: .tool, content: "file contents here")
+        msg.toolCallId = "tc1"
+        let messages = [msg]
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "m", stream: false)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let msgs = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertEqual(msgs[0]["role"] as? String, "tool")
+        XCTAssertEqual(msgs[0]["tool_call_id"] as? String, "tc1")
+    }
+
+    // MARK: - Backend Request
+
+    func testBuildBackendRequestURL() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Hi")]
+        let request = try service.buildBackendRequest(
+            messages: messages, model: "m", stream: true,
+            backendBaseURL: "https://api.grump.app", authToken: "tok123"
+        )
+        XCTAssertEqual(request.url?.host, "api.grump.app")
+        XCTAssertTrue(request.url?.path.contains("chat/completions") ?? false)
+    }
+
+    func testBuildBackendRequestAuth() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Hi")]
+        let request = try service.buildBackendRequest(
+            messages: messages, model: "m", stream: true,
+            backendBaseURL: "https://api.grump.app", authToken: "tok123"
+        )
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer tok123")
+    }
+
+    func testBuildBackendRequestTrimsTrailingSlash() throws {
+        let service = OpenRouterService()
+        let messages = [Message(role: .user, content: "Hi")]
+        let request = try service.buildBackendRequest(
+            messages: messages, model: "m", stream: true,
+            backendBaseURL: "https://api.grump.app/", authToken: "tok"
+        )
+        XCTAssertFalse(request.url?.absoluteString.contains("//api") ?? true)
+    }
+
+    // MARK: - ServiceError
+
+    func testServiceErrorMissingAPIKey() {
+        let error = OpenRouterService.ServiceError.missingAPIKey
+        XCTAssertNotNil(error.errorDescription)
+    }
+
+    func testServiceErrorNetwork() {
+        let error = OpenRouterService.ServiceError.networkError
+        XCTAssertNotNil(error.errorDescription)
+    }
+
+    func testServiceErrorAPIError() {
+        let error = OpenRouterService.ServiceError.apiError(statusCode: 429, message: "Rate limited")
+        XCTAssertNotNil(error.errorDescription)
+        XCTAssertTrue(error.errorDescription?.contains("429") ?? false)
+    }
+
+    func testServiceErrorInvalidResponse() {
+        let error = OpenRouterService.ServiceError.invalidResponse
+        XCTAssertNotNil(error.errorDescription)
+    }
 }

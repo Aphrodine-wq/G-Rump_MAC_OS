@@ -1,6 +1,7 @@
 ---
 name: MLX Training
 description: Fine-tune and train models using Apple's MLX framework on Apple Silicon.
+tags: [mlx, apple-silicon, fine-tuning, lora, machine-learning, on-device]
 ---
 
 # MLX Training

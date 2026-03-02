@@ -19,6 +19,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
     case terminal
     case appstore
     case accessibility
+    case memory
 
     var id: String { rawValue }
 
@@ -41,6 +42,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
         case .terminal: return "terminal.fill"
         case .appstore: return "bag.fill"
         case .accessibility: return "figure.stand"
+        case .memory: return "brain.head.profile"
         }
     }
 
@@ -63,6 +65,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
         case .terminal: return "Terminal"
         case .appstore: return "App Store"
         case .accessibility: return "A11y"
+        case .memory: return "Memory"
         }
     }
 
@@ -77,6 +80,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
         case .terminal: return "7"
         case .spm: return "8"
         case .docs: return "9"
+        case .memory: return "0"
         default: return nil
         }
     }

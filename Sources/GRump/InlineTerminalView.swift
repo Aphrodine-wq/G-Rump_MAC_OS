@@ -23,7 +23,9 @@ final class TerminalService: ObservableObject {
     @Published var activeSessionIndex: Int = 0
     @Published var commandInput: String = ""
 
+    #if os(macOS)
     private var processes: [UUID: Process] = [:]
+    #endif
 
     var activeSession: TerminalSession? {
         guard activeSessionIndex >= 0 && activeSessionIndex < sessions.count else { return nil }
@@ -32,7 +34,7 @@ final class TerminalService: ObservableObject {
 
     func createSession(workingDirectory: String) {
         let resolvedDir = workingDirectory.isEmpty
-            ? (FileManager.default.homeDirectoryForCurrentUser.path)
+            ? NSHomeDirectory()
             : workingDirectory
         let session = TerminalSession(
             title: "Terminal \(sessions.count + 1)",
@@ -45,10 +47,12 @@ final class TerminalService: ObservableObject {
     func closeSession(at index: Int) {
         guard index >= 0 && index < sessions.count else { return }
         let session = sessions[index]
+        #if os(macOS)
         if let process = processes[session.id] {
             process.terminate()
             processes.removeValue(forKey: session.id)
         }
+        #endif
         sessions.remove(at: index)
         if activeSessionIndex >= sessions.count {
             activeSessionIndex = max(0, sessions.count - 1)
@@ -57,6 +61,7 @@ final class TerminalService: ObservableObject {
 
     func runCommand(_ command: String) {
         guard activeSessionIndex >= 0 && activeSessionIndex < sessions.count else { return }
+        #if os(macOS)
         let sessionId = sessions[activeSessionIndex].id
         let dir = sessions[activeSessionIndex].workingDirectory
 
@@ -125,14 +130,17 @@ final class TerminalService: ObservableObject {
                 self.processes.removeValue(forKey: sessionId)
             }
         }
+        #endif
     }
 
     func interruptActive() {
+        #if os(macOS)
         guard activeSessionIndex >= 0 && activeSessionIndex < sessions.count else { return }
         let sessionId = sessions[activeSessionIndex].id
         if let process = processes[sessionId] {
             process.interrupt()
         }
+        #endif
     }
 
     func clearActive() {

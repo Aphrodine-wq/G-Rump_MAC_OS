@@ -1,6 +1,7 @@
 ---
 name: SwiftUI Migration
 description: Guide UIKit-to-SwiftUI migration with modern patterns and best practices.
+tags: [swiftui, uikit, migration, ios, macos, apple]
 ---
 
 # SwiftUI Migration

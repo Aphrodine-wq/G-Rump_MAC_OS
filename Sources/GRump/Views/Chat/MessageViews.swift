@@ -107,6 +107,7 @@ struct AssistantMessageBlock: View {
         case .argue: return .error
         case .spec: return .thinking
         case .parallel: return .thinking
+        case .speculative: return .neutral
         }
     }
 }
@@ -117,6 +118,8 @@ struct AssistantActionBar: View {
     let onReactionChange: (MessageReaction?) -> Void
     let onRegenerate: () -> Void
     let onCopy: () -> Void
+    var messageContent: String = ""
+    @State private var showTranslateMenu = false
     
     var body: some View {
         HStack(spacing: Spacing.xl) {
@@ -157,12 +160,127 @@ struct AssistantActionBar: View {
             }
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Regenerate response")
+
+            // Translate (surfaces TranslationService)
+            if TranslationService.shared.isTranslationAvailable {
+                Button(action: { showTranslateMenu.toggle() }) {
+                    Image(systemName: "translate")
+                        .font(Typography.captionSmall)
+                        .foregroundColor(themeManager.palette.textMuted)
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel("Translate message")
+                .popover(isPresented: $showTranslateMenu) {
+                    TranslatePopover(text: messageContent, themeManager: themeManager)
+                }
+            }
+
+            // Writing Tools (surfaces WritingToolsService)
+            if WritingToolsService.shared.isWritingToolsAvailable {
+                Menu {
+                    Button("Improve Writing", action: { improveWithWritingTools(.proofread) })
+                    Button("Make Concise", action: { improveWithWritingTools(.concise) })
+                    Button("Generate Docs", action: { improveWithWritingTools(.documentation) })
+                } label: {
+                    Image(systemName: "pencil.and.sparkle")
+                        .font(Typography.captionSmall)
+                        .foregroundColor(themeManager.palette.textMuted)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 20)
+                .accessibilityLabel("Writing Tools")
+            }
         }
         .opacity(0.6)
         .onHover { isHovered in
             withAnimation(.easeInOut(duration: Anim.quick)) {
                 // Add hover effect if needed
             }
+        }
+    }
+
+    private func improveWithWritingTools(_ type: WritingToolsAction) {
+        Task {
+            do {
+                let result: String
+                switch type {
+                case .proofread:
+                    result = try await WritingToolsService.shared.improveText(messageContent, improvement: .grammar)
+                case .concise:
+                    result = try await WritingToolsService.shared.improveText(messageContent, improvement: .conciseness)
+                case .documentation:
+                    result = try await WritingToolsService.shared.generateDocumentation(for: messageContent, language: "swift", type: .inline)
+                }
+                #if os(macOS)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result, forType: .string)
+                #endif
+            } catch {
+                GRumpLogger.capture.error("Writing Tools failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private enum WritingToolsAction {
+        case proofread, concise, documentation
+    }
+}
+
+// MARK: - Translate Popover
+
+struct TranslatePopover: View {
+    let text: String
+    let themeManager: ThemeManager
+    @State private var translatedText = ""
+    @State private var selectedLanguage: TranslationLanguage = .spanish
+    @State private var isTranslating = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            HStack {
+                Image(systemName: "translate")
+                    .foregroundColor(themeManager.palette.effectiveAccent)
+                Text("Translate")
+                    .font(Typography.bodySemibold)
+                    .foregroundColor(themeManager.palette.textPrimary)
+            }
+            Picker("To", selection: $selectedLanguage) {
+                ForEach(TranslatePopover.availableLanguages) { lang in
+                    Text(lang.name).tag(lang)
+                }
+            }
+            .pickerStyle(.menu)
+            .onChange(of: selectedLanguage) { _, _ in translateText() }
+
+            if isTranslating {
+                ProgressView()
+                    .scaleEffect(0.8)
+            } else if !translatedText.isEmpty {
+                Text(translatedText)
+                    .font(Typography.body)
+                    .foregroundColor(themeManager.palette.textPrimary)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding()
+        .frame(minWidth: 280, maxWidth: 360)
+        .onAppear { translateText() }
+    }
+
+    static let availableLanguages: [TranslationLanguage] = [
+        .spanish, .french, .german, .japanese, .chineseSimplified, .korean, .portuguese
+    ]
+
+    private func translateText() {
+        guard !text.isEmpty else { return }
+        isTranslating = true
+        Task {
+            do {
+                translatedText = try await TranslationService.shared.translate(text, to: selectedLanguage)
+            } catch {
+                translatedText = "Translation unavailable"
+            }
+            isTranslating = false
         }
     }
 }

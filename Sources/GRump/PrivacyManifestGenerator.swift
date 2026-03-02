@@ -11,6 +11,8 @@ import SwiftUI
 @MainActor
 final class PrivacyManifestGenerator: ObservableObject {
     
+    static let shared = PrivacyManifestGenerator()
+
     @Published var isAnalyzing = false
     @Published var analysisProgress: Double = 0
     @Published var generatedManifest: PrivacyManifest?

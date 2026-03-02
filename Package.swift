@@ -17,16 +17,20 @@ let package = Package(
             name: "GRumpServer",
             targets: ["GRumpServer"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+    ],
     targets: [
         .executableTarget(
             name: "GRump",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS])),
+            ],
             path: "Sources/GRump",
             exclude: ["Info.plist"],
             resources: [.process("Resources")],
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency=targeted"),
+                .enableExperimentalFeature("StrictConcurrency=complete"),
                 .define("GRUMP_SPM_BUILD"),
             ]),
         .executableTarget(

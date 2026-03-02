@@ -74,8 +74,26 @@ struct ChatInputView: View {
                         .contentShape(Rectangle())
                         .focused(focus)
                         .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            // Delayed focus to ensure view hierarchy is ready
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 focus.wrappedValue = true
+                                #if os(macOS)
+                                // Force first responder via AppKit as a fallback
+                                if let window = NSApp.keyWindow {
+                                    window.makeFirstResponder(nil)
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                        focus.wrappedValue = true
+                                    }
+                                }
+                                #endif
+                            }
+                        }
+                        .onChange(of: isLoading) { _, newLoading in
+                            if !newLoading {
+                                // Re-grab focus after streaming completes
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    focus.wrappedValue = true
+                                }
                             }
                         }
                         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers, location in
@@ -102,7 +120,15 @@ struct ChatInputView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    focus.wrappedValue = true
+                    #if os(macOS)
+                    // Reset responder chain then re-focus to ensure TextEditor gets keystrokes
+                    if let window = NSApp.keyWindow {
+                        window.makeFirstResponder(nil)
+                    }
+                    #endif
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        focus.wrappedValue = true
+                    }
                 }
                 
                 // Mic button for voice
@@ -187,6 +213,16 @@ struct ChatInputView: View {
                 showAttachPopover = false
                 openImagePicker()
             }
+            if ContinuityScannerService.shared.isScanningAvailable {
+                attachmentOption(
+                    icon: "doc.viewfinder",
+                    label: "Scan",
+                    color: Color(red: 0.2, green: 0.8, blue: 0.6)
+                ) {
+                    showAttachPopover = false
+                    scanDocument()
+                }
+            }
         }
         .padding(.horizontal, Spacing.xxl)
         .padding(.vertical, Spacing.xxl)
@@ -257,6 +293,28 @@ struct ChatInputView: View {
             if response == .OK {
                 attachedFiles.append(contentsOf: panel.urls)
                 onFileAttached?(attachedFiles)
+            }
+        }
+    }
+
+    private func scanDocument() {
+        Task {
+            do {
+                if let scanned = try await ContinuityScannerService.shared.startDocumentScanning() {
+                    let tempDir = FileManager.default.temporaryDirectory
+                    let filename = "scan_\(Int(Date().timeIntervalSince1970)).png"
+                    let fileURL = tempDir.appendingPathComponent(filename)
+                    let bitmapRep = NSBitmapImageRep(cgImage: scanned.image)
+                    if let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+                        try pngData.write(to: fileURL)
+                        await MainActor.run {
+                            attachedFiles.append(fileURL)
+                            onFileAttached?(attachedFiles)
+                        }
+                    }
+                }
+            } catch {
+                GRumpLogger.capture.error("Document scan failed: \(error.localizedDescription)")
             }
         }
     }

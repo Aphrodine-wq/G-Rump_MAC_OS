@@ -211,9 +211,15 @@ struct AsyncImage<Content>: View where Content: View {
         
         do {
             let data = try Data(contentsOf: url)
+            #if os(macOS)
             if let nsImage = NSImage(data: data) {
                 self.image = Image(nsImage: nsImage)
             }
+            #else
+            if let uiImage = UIImage(data: data) {
+                self.image = Image(uiImage: uiImage)
+            }
+            #endif
         } catch {
             GRumpLogger.general.error("Failed to load image: \(error.localizedDescription)")
         }

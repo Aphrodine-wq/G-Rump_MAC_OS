@@ -1,6 +1,7 @@
 ---
 name: Privacy Manifest Audit
 description: Audit and create Apple privacy manifests (PrivacyInfo.xcprivacy) for App Store compliance.
+tags: [privacy, apple, app-store, xcprivacy, compliance, tracking]
 ---
 
 # Privacy Manifest Audit

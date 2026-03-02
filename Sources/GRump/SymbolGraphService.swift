@@ -188,6 +188,7 @@ final class SymbolGraphService: ObservableObject {
         args += ["-I", buildPath.path]
         args += ["-F", buildPath.path]
 
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = args
@@ -212,6 +213,10 @@ final class SymbolGraphService: ObservableObject {
             lastError = "symbolgraph-extract failed: \(errStr.prefix(500))"
             return nil
         }
+        #else
+        lastError = "Symbol graph extraction is not available on iOS"
+        return nil
+        #endif
 
         // Find and parse the output JSON
         let expectedFile = outputDir.appendingPathComponent("\(moduleName).symbols.json")
@@ -245,6 +250,7 @@ final class SymbolGraphService: ObservableObject {
     }
 
     private func getSDKPath() async -> String? {
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["--show-sdk-path"]
@@ -254,6 +260,9 @@ final class SymbolGraphService: ObservableObject {
         process.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Summary for Agent Prompt
@@ -337,6 +346,7 @@ final class SymbolGraphService: ObservableObject {
 
     /// Run `swift package generate-documentation` for a project.
     func generateDocC(projectPath: String) async -> (success: Bool, output: String) {
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["swift", "package", "generate-documentation"]
@@ -359,6 +369,9 @@ final class SymbolGraphService: ObservableObject {
 
         let success = process.terminationStatus == 0
         return (success, success ? output : errOutput)
+        #else
+        return (false, "DocC generation is not available on iOS")
+        #endif
     }
 
     // MARK: - Query Helpers

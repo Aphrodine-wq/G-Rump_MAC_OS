@@ -1,6 +1,7 @@
 ---
 name: GraphQL Design
 description: Design GraphQL schemas, resolvers, and client integrations with best practices.
+tags: [graphql, api, schema-design, resolvers, subscriptions]
 ---
 
 # GraphQL Design
@@ -38,3 +39,16 @@ You are an expert at designing GraphQL APIs and schemas.
 - Use WebSocket transport (graphql-ws protocol).
 - Keep subscription payloads minimal — client refetches full data.
 - Implement heartbeat/keepalive for connection health.
+
+## Anti-Patterns
+- Exposing database schema directly as GraphQL schema
+- Deeply nested queries without depth limiting (DoS vector)
+- Mutations that don't return the modified object (forces client refetch)
+- Using GraphQL for file uploads (use REST presigned URLs)
+- N+1 resolver queries without DataLoader batching
+
+## Verification
+- Schema validates with `graphql-inspector` or similar tool
+- Query depth and complexity limits are enforced
+- All resolvers handle errors gracefully with structured error responses
+- Introspection is disabled in production environments

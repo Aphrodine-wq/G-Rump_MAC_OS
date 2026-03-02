@@ -6,46 +6,68 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
     case openRouter = "openrouter"
     case openAI = "openai"
     case anthropic = "anthropic"
+    case google = "google"
     case ollama = "ollama"
     case onDevice = "ondevice"
-    
+
     var id: String { rawValue }
-    
+
     var displayName: String {
         switch self {
         case .openRouter: return "OpenRouter"
         case .openAI: return "OpenAI"
         case .anthropic: return "Anthropic"
+        case .google: return "Google AI"
         case .ollama: return "Ollama (Local)"
         case .onDevice: return "On-Device (Core ML)"
         }
     }
-    
+
     var description: String {
         switch self {
         case .openRouter: return "Access multiple models through OpenRouter"
         case .openAI: return "Direct access to OpenAI models"
         case .anthropic: return "Direct access to Anthropic Claude models"
+        case .google: return "Direct access to Google Gemini models"
         case .ollama: return "Run models locally on your machine"
         case .onDevice: return "Apple Silicon inference via Core ML \u{2014} zero network, zero telemetry"
         }
     }
-    
+
     var requiresAPIKey: Bool {
         switch self {
-        case .openRouter, .openAI, .anthropic: return true
+        case .openRouter, .openAI, .anthropic, .google: return true
         case .ollama, .onDevice: return false
         }
     }
-    
+
     var defaultBaseURL: String {
         switch self {
         case .openRouter: return "https://openrouter.ai/api/v1"
         case .openAI: return "https://api.openai.com/v1"
         case .anthropic: return "https://api.anthropic.com/v1"
+        case .google: return "https://generativelanguage.googleapis.com/v1beta"
         case .ollama: return "http://localhost:11434/v1"
         case .onDevice: return "" // No network needed
         }
+    }
+}
+
+// MARK: - Model Mode
+
+struct ModelMode: Codable, Equatable, Identifiable {
+    let id: String
+    let displayName: String
+    let apiModelID: String?
+    let overrideContextWindow: Int?
+    let overrideMaxOutput: Int?
+
+    init(id: String, displayName: String, apiModelID: String? = nil, overrideContextWindow: Int? = nil, overrideMaxOutput: Int? = nil) {
+        self.id = id
+        self.displayName = displayName
+        self.apiModelID = apiModelID
+        self.overrideContextWindow = overrideContextWindow
+        self.overrideMaxOutput = overrideMaxOutput
     }
 }
 
@@ -62,17 +84,41 @@ struct EnhancedAIModel: Identifiable, Codable, Equatable {
     let requiresPaidTier: Bool
     let capabilities: ModelCapabilities
     let pricing: ModelPricing?
-    
-    var rawValue: String {
-        switch provider {
-        case .openRouter: return modelID
-        case .openAI: return modelID
-        case .anthropic: return modelID
-        case .ollama: return modelID
-        case .onDevice: return modelID
-        }
+    let modes: [ModelMode]
+
+    var rawValue: String { modelID }
+
+    var hasModes: Bool { !modes.isEmpty }
+
+    func effectiveModelID(mode: ModelMode?) -> String {
+        guard let mode = mode, let override = mode.apiModelID else { return modelID }
+        return override
     }
-    
+
+    func effectiveContextWindow(mode: ModelMode?) -> Int {
+        mode?.overrideContextWindow ?? contextWindow
+    }
+
+    func effectiveMaxOutput(mode: ModelMode?) -> Int {
+        mode?.overrideMaxOutput ?? maxOutput
+    }
+
+    init(id: String, provider: AIProvider, modelID: String, displayName: String, description: String,
+         contextWindow: Int, maxOutput: Int, requiresPaidTier: Bool, capabilities: ModelCapabilities,
+         pricing: ModelPricing?, modes: [ModelMode] = []) {
+        self.id = id
+        self.provider = provider
+        self.modelID = modelID
+        self.displayName = displayName
+        self.description = description
+        self.contextWindow = contextWindow
+        self.maxOutput = maxOutput
+        self.requiresPaidTier = requiresPaidTier
+        self.capabilities = capabilities
+        self.pricing = pricing
+        self.modes = modes
+    }
+
     static func == (lhs: EnhancedAIModel, rhs: EnhancedAIModel) -> Bool {
         lhs.id == rhs.id
     }
@@ -183,231 +229,67 @@ final class AIModelRegistry: @unchecked Sendable {
     
     // MARK: - Model Loading
     
+    // MARK: - Shared Capabilities
+
+    private static let fullCaps = ModelCapabilities(
+        supportsTools: true, supportsVision: true, supportsStreaming: true,
+        supportsFunctionCalling: true, supportsJSONMode: true, maxTokens: nil,
+        supportsSystemMessages: true, supportsParallelToolUse: true
+    )
+
+    private static let basicCaps = ModelCapabilities(
+        supportsTools: true, supportsVision: false, supportsStreaming: true,
+        supportsFunctionCalling: true, supportsJSONMode: false, maxTokens: nil,
+        supportsSystemMessages: true, supportsParallelToolUse: false
+    )
+
     private func loadDefaultModels() {
+        let full = Self.fullCaps
+        let basic = Self.basicCaps
+
         models = [
-            // OpenRouter Models (existing ones)
+
+            // ──────────────────────────────────────────────
+            // MARK: Anthropic (Direct API)
+            // ──────────────────────────────────────────────
+
             EnhancedAIModel(
-                id: "openrouter-claude-opus-4.6",
-                provider: .openRouter,
-                modelID: "anthropic/claude-opus-4.6",
+                id: "anthropic-claude-opus-4.6",
+                provider: .anthropic,
+                modelID: "claude-opus-4-6-20250827",
                 displayName: "Claude Opus 4.6",
-                description: "Flagship frontier model — complex coding, agents, long context",
-                contextWindow: 1_000_000,
+                description: "Flagship frontier — complex coding, agents, extended thinking",
+                contextWindow: 200_000,
                 maxOutput: 65_536,
                 requiresPaidTier: true,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 1_000_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.015, outputPricePer1K: 0.075, currency: "USD")
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.015, outputPricePer1K: 0.075, currency: "USD"),
+                modes: [
+                    ModelMode(id: "standard", displayName: "Standard"),
+                    ModelMode(id: "thinking", displayName: "Thinking"),
+                    ModelMode(id: "fast", displayName: "Fast", apiModelID: "claude-opus-4-6-fast-20250827"),
+                    ModelMode(id: "1m", displayName: "1M Context", overrideContextWindow: 1_000_000),
+                ]
             ),
-            
-            // OpenAI Models
+
             EnhancedAIModel(
-                id: "openai-gpt-4.1",
-                provider: .openAI,
-                modelID: "gpt-4.1",
-                displayName: "GPT-4.1",
-                description: "OpenAI flagship — coding, instruction following, long context",
-                contextWindow: 1_047_576,
-                maxOutput: 32_768,
-                requiresPaidTier: true,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 1_047_576,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.002, outputPricePer1K: 0.008, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-gpt-4.1-mini",
-                provider: .openAI,
-                modelID: "gpt-4.1-mini",
-                displayName: "GPT-4.1 Mini",
-                description: "Fast and efficient, great balance of speed and intelligence",
-                contextWindow: 1_047_576,
-                maxOutput: 32_768,
-                requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 1_047_576,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.0004, outputPricePer1K: 0.0016, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-gpt-4.1-nano",
-                provider: .openAI,
-                modelID: "gpt-4.1-nano",
-                displayName: "GPT-4.1 Nano",
-                description: "Ultra-fast, cheapest OpenAI model for simple tasks",
-                contextWindow: 1_047_576,
-                maxOutput: 32_768,
-                requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 1_047_576,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.0001, outputPricePer1K: 0.0004, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-gpt-4o",
-                provider: .openAI,
-                modelID: "gpt-4o",
-                displayName: "GPT-4o",
-                description: "Multimodal flagship with vision and audio",
-                contextWindow: 128_000,
-                maxOutput: 16_384,
-                requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 128_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.0025, outputPricePer1K: 0.01, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-gpt-4o-mini",
-                provider: .openAI,
-                modelID: "gpt-4o-mini",
-                displayName: "GPT-4o Mini",
-                description: "Fast multimodal model for most tasks",
-                contextWindow: 128_000,
-                maxOutput: 16_384,
-                requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 128_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.00015, outputPricePer1K: 0.0006, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-o3",
-                provider: .openAI,
-                modelID: "o3",
-                displayName: "o3",
-                description: "Advanced reasoning model for complex problems",
-                contextWindow: 200_000,
-                maxOutput: 100_000,
-                requiresPaidTier: true,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 200_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.01, outputPricePer1K: 0.04, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-o3-mini",
-                provider: .openAI,
-                modelID: "o3-mini",
-                displayName: "o3 Mini",
-                description: "Fast reasoning model, cost-efficient",
-                contextWindow: 200_000,
-                maxOutput: 100_000,
-                requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 200_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.00115, outputPricePer1K: 0.0044, currency: "USD")
-            ),
-            
-            EnhancedAIModel(
-                id: "openai-o4-mini",
-                provider: .openAI,
-                modelID: "o4-mini",
-                displayName: "o4 Mini",
-                description: "Latest reasoning model with tool use and vision",
-                contextWindow: 200_000,
-                maxOutput: 100_000,
-                requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 200_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.00115, outputPricePer1K: 0.0044, currency: "USD")
-            ),
-            
-            // Anthropic Models
-            EnhancedAIModel(
-                id: "anthropic-claude-opus-4",
+                id: "anthropic-claude-sonnet-4.6",
                 provider: .anthropic,
-                modelID: "claude-opus-4-20250514",
-                displayName: "Claude Opus 4",
-                description: "Anthropic flagship — complex coding, agents, extended thinking",
+                modelID: "claude-sonnet-4-6-20250827",
+                displayName: "Claude Sonnet 4.6",
+                description: "Frontier Sonnet — coding, agents, professional work",
                 contextWindow: 200_000,
-                maxOutput: 32_000,
+                maxOutput: 16_384,
                 requiresPaidTier: true,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 200_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
-                pricing: ModelPricing(inputPricePer1K: 0.015, outputPricePer1K: 0.075, currency: "USD")
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.003, outputPricePer1K: 0.015, currency: "USD"),
+                modes: [
+                    ModelMode(id: "standard", displayName: "Standard"),
+                    ModelMode(id: "thinking", displayName: "Thinking"),
+                    ModelMode(id: "fast", displayName: "Fast", apiModelID: "claude-sonnet-4-6-fast-20250827"),
+                ]
             ),
-            
+
             EnhancedAIModel(
                 id: "anthropic-claude-sonnet-4",
                 provider: .anthropic,
@@ -417,19 +299,10 @@ final class AIModelRegistry: @unchecked Sendable {
                 contextWindow: 200_000,
                 maxOutput: 16_000,
                 requiresPaidTier: false,
-                capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: true,
-                    maxTokens: 200_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: true
-                ),
+                capabilities: full,
                 pricing: ModelPricing(inputPricePer1K: 0.003, outputPricePer1K: 0.015, currency: "USD")
             ),
-            
+
             EnhancedAIModel(
                 id: "anthropic-claude-3-5-haiku",
                 provider: .anthropic,
@@ -440,17 +313,382 @@ final class AIModelRegistry: @unchecked Sendable {
                 maxOutput: 8_192,
                 requiresPaidTier: false,
                 capabilities: ModelCapabilities(
-                    supportsTools: true,
-                    supportsVision: true,
-                    supportsStreaming: true,
-                    supportsFunctionCalling: true,
-                    supportsJSONMode: false,
-                    maxTokens: 200_000,
-                    supportsSystemMessages: true,
-                    supportsParallelToolUse: false
+                    supportsTools: true, supportsVision: true, supportsStreaming: true,
+                    supportsFunctionCalling: true, supportsJSONMode: false, maxTokens: nil,
+                    supportsSystemMessages: true, supportsParallelToolUse: false
                 ),
                 pricing: ModelPricing(inputPricePer1K: 0.0008, outputPricePer1K: 0.004, currency: "USD")
-            )
+            ),
+
+            // ──────────────────────────────────────────────
+            // MARK: OpenAI (Direct API)
+            // ──────────────────────────────────────────────
+
+            EnhancedAIModel(
+                id: "openai-codex-5.3",
+                provider: .openAI,
+                modelID: "codex-5.3",
+                displayName: "Codex 5.3",
+                description: "OpenAI's latest coding model — agentic, multi-file, deep reasoning",
+                contextWindow: 200_000,
+                maxOutput: 65_536,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.005, outputPricePer1K: 0.02, currency: "USD"),
+                modes: [
+                    ModelMode(id: "standard", displayName: "Standard"),
+                    ModelMode(id: "reasoning", displayName: "Reasoning", apiModelID: "codex-5.3-reasoning"),
+                    ModelMode(id: "fast", displayName: "Fast", apiModelID: "codex-5.3-fast"),
+                ]
+            ),
+
+            EnhancedAIModel(
+                id: "openai-gpt-4o",
+                provider: .openAI,
+                modelID: "gpt-4o",
+                displayName: "GPT-4o",
+                description: "Multimodal flagship with vision and audio",
+                contextWindow: 128_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.0025, outputPricePer1K: 0.01, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openai-gpt-4o-mini",
+                provider: .openAI,
+                modelID: "gpt-4o-mini",
+                displayName: "GPT-4o Mini",
+                description: "Fast multimodal model for most tasks",
+                contextWindow: 128_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00015, outputPricePer1K: 0.0006, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openai-o3",
+                provider: .openAI,
+                modelID: "o3",
+                displayName: "o3",
+                description: "Advanced reasoning model for complex problems",
+                contextWindow: 200_000,
+                maxOutput: 100_000,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.01, outputPricePer1K: 0.04, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openai-o3-mini",
+                provider: .openAI,
+                modelID: "o3-mini",
+                displayName: "o3 Mini",
+                description: "Fast reasoning model, cost-efficient",
+                contextWindow: 200_000,
+                maxOutput: 100_000,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00115, outputPricePer1K: 0.0044, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openai-o4-mini",
+                provider: .openAI,
+                modelID: "o4-mini",
+                displayName: "o4 Mini",
+                description: "Latest reasoning model with tool use and vision",
+                contextWindow: 200_000,
+                maxOutput: 100_000,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00115, outputPricePer1K: 0.0044, currency: "USD")
+            ),
+
+            // ──────────────────────────────────────────────
+            // MARK: Google Gemini (Direct API)
+            // ──────────────────────────────────────────────
+
+            EnhancedAIModel(
+                id: "google-gemini-3.1-pro",
+                provider: .google,
+                modelID: "gemini-3.1-pro",
+                displayName: "Gemini 3.1 Pro",
+                description: "Flagship reasoning, complex coding, 1M context window",
+                contextWindow: 1_000_000,
+                maxOutput: 65_536,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00125, outputPricePer1K: 0.01, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "google-gemini-3.1-flash",
+                provider: .google,
+                modelID: "gemini-3.1-flash",
+                displayName: "Gemini 3.1 Flash",
+                description: "Speed king — fast iteration, great for drafting and exploration",
+                contextWindow: 1_000_000,
+                maxOutput: 65_536,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00015, outputPricePer1K: 0.0006, currency: "USD")
+            ),
+
+            // ──────────────────────────────────────────────
+            // MARK: OpenRouter (Multi-Provider)
+            // ──────────────────────────────────────────────
+
+            EnhancedAIModel(
+                id: "openrouter-claude-opus-4.6",
+                provider: .openRouter,
+                modelID: "anthropic/claude-opus-4.6",
+                displayName: "Claude Opus 4.6",
+                description: "Flagship frontier model via OpenRouter — complex coding, agents, long context",
+                contextWindow: 1_000_000,
+                maxOutput: 65_536,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.015, outputPricePer1K: 0.075, currency: "USD"),
+                modes: [
+                    ModelMode(id: "standard", displayName: "Standard"),
+                    ModelMode(id: "thinking", displayName: "Thinking"),
+                    ModelMode(id: "fast", displayName: "Fast", apiModelID: "anthropic/claude-opus-4.6:fast"),
+                    ModelMode(id: "1m", displayName: "1M Context", overrideContextWindow: 1_000_000),
+                ]
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-claude-sonnet-4.6",
+                provider: .openRouter,
+                modelID: "anthropic/claude-sonnet-4.6",
+                displayName: "Claude Sonnet 4.6",
+                description: "Frontier Sonnet via OpenRouter — coding, agents, professional work",
+                contextWindow: 200_000,
+                maxOutput: 16_384,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.003, outputPricePer1K: 0.015, currency: "USD"),
+                modes: [
+                    ModelMode(id: "standard", displayName: "Standard"),
+                    ModelMode(id: "thinking", displayName: "Thinking"),
+                    ModelMode(id: "fast", displayName: "Fast", apiModelID: "anthropic/claude-sonnet-4.6:fast"),
+                ]
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-claude-sonnet-4",
+                provider: .openRouter,
+                modelID: "anthropic/claude-sonnet-4",
+                displayName: "Claude Sonnet 4",
+                description: "Balanced coding and reasoning via OpenRouter",
+                contextWindow: 200_000,
+                maxOutput: 16_000,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.003, outputPricePer1K: 0.015, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-gemini-3.1-pro",
+                provider: .openRouter,
+                modelID: "google/gemini-3.1-pro",
+                displayName: "Gemini 3.1 Pro",
+                description: "Flagship reasoning via OpenRouter, 1M context",
+                contextWindow: 1_000_000,
+                maxOutput: 65_536,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00125, outputPricePer1K: 0.01, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-gemini-3.1-flash",
+                provider: .openRouter,
+                modelID: "google/gemini-3.1-flash",
+                displayName: "Gemini 3.1 Flash",
+                description: "Speed king via OpenRouter — fast iteration",
+                contextWindow: 1_000_000,
+                maxOutput: 65_536,
+                requiresPaidTier: false,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.00015, outputPricePer1K: 0.0006, currency: "USD")
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-codex-5.3",
+                provider: .openRouter,
+                modelID: "openai/codex-5.3",
+                displayName: "Codex 5.3",
+                description: "OpenAI's latest coding model via OpenRouter",
+                contextWindow: 200_000,
+                maxOutput: 65_536,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.005, outputPricePer1K: 0.02, currency: "USD"),
+                modes: [
+                    ModelMode(id: "standard", displayName: "Standard"),
+                    ModelMode(id: "reasoning", displayName: "Reasoning", apiModelID: "openai/codex-5.3-reasoning"),
+                    ModelMode(id: "fast", displayName: "Fast", apiModelID: "openai/codex-5.3-fast"),
+                ]
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-kimi-k2.5",
+                provider: .openRouter,
+                modelID: "moonshotai/kimi-k2.5",
+                displayName: "Kimi K2.5",
+                description: "Strong reasoning and visual coding, top tool use",
+                contextWindow: 200_000,
+                maxOutput: 16_384,
+                requiresPaidTier: true,
+                capabilities: full,
+                pricing: ModelPricing(inputPricePer1K: 0.002, outputPricePer1K: 0.008, currency: "USD")
+            ),
+
+            // ──────────────────────────────────────────────
+            // MARK: OpenRouter — Free Models
+            // ──────────────────────────────────────────────
+
+            EnhancedAIModel(
+                id: "openrouter-deepseek-chat",
+                provider: .openRouter,
+                modelID: "deepseek/deepseek-chat-v3-0324:free",
+                displayName: "DeepSeek V3",
+                description: "Strong coder, free DeepSeek V3",
+                contextWindow: 164_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-qwen3-coder",
+                provider: .openRouter,
+                modelID: "qwen/qwen3-coder:free",
+                displayName: "Qwen3 Coder 480B",
+                description: "Best free coding model, 480B MoE, agentic tool use",
+                contextWindow: 262_144,
+                maxOutput: 32_768,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-deepseek-r1",
+                provider: .openRouter,
+                modelID: "deepseek/deepseek-r1-0528:free",
+                displayName: "DeepSeek R1",
+                description: "Open-source reasoning on par with o1, 164K context",
+                contextWindow: 164_000,
+                maxOutput: 32_768,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-gpt-oss-120b",
+                provider: .openRouter,
+                modelID: "openai/gpt-oss-120b:free",
+                displayName: "GPT-OSS 120B",
+                description: "OpenAI open-weight MoE, native tool use & reasoning",
+                contextWindow: 128_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-trinity-large",
+                provider: .openRouter,
+                modelID: "arcee-ai/trinity-large-preview:free",
+                displayName: "Trinity Large 400B",
+                description: "400B MoE, trained for agentic coding (Cline/OpenCode)",
+                contextWindow: 128_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-step-3.5-flash",
+                provider: .openRouter,
+                modelID: "stepfun/step-3.5-flash:free",
+                displayName: "Step 3.5 Flash",
+                description: "196B MoE, blazing fast at 256K context",
+                contextWindow: 256_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-llama-3.3-70b",
+                provider: .openRouter,
+                modelID: "meta-llama/llama-3.3-70b-instruct:free",
+                displayName: "Llama 3.3 70B",
+                description: "Meta's best open-weight 70B, multilingual coding",
+                contextWindow: 128_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "openrouter-glm-4.5-air",
+                provider: .openRouter,
+                modelID: "z-ai/glm-4.5-air:free",
+                displayName: "GLM 4.5 Air",
+                description: "Agent-first model with thinking mode, tool use",
+                contextWindow: 128_000,
+                maxOutput: 16_384,
+                requiresPaidTier: false,
+                capabilities: basic,
+                pricing: nil
+            ),
+
+            // ──────────────────────────────────────────────
+            // MARK: On-Device (Apple Silicon)
+            // ──────────────────────────────────────────────
+
+            EnhancedAIModel(
+                id: "ondevice-apple-foundation",
+                provider: .onDevice,
+                modelID: "apple-foundation-model",
+                displayName: "Apple Foundation Model",
+                description: "On-device Apple Intelligence — zero cost, zero latency, full privacy",
+                contextWindow: 32_000,
+                maxOutput: 4_096,
+                requiresPaidTier: false,
+                capabilities: ModelCapabilities(
+                    supportsTools: true, supportsVision: false, supportsStreaming: true,
+                    supportsFunctionCalling: true, supportsJSONMode: false, maxTokens: nil,
+                    supportsSystemMessages: true, supportsParallelToolUse: false
+                ),
+                pricing: nil
+            ),
+
+            EnhancedAIModel(
+                id: "ondevice-coreml",
+                provider: .onDevice,
+                modelID: "coreml-local",
+                displayName: "Core ML Local",
+                description: "Custom Core ML model — bring your own GGUF or MLX model",
+                contextWindow: 8_192,
+                maxOutput: 2_048,
+                requiresPaidTier: false,
+                capabilities: ModelCapabilities.default,
+                pricing: nil
+            ),
         ]
     }
     
@@ -573,7 +811,9 @@ final class AIModelRegistry: @unchecked Sendable {
         var lastError: Error = URLError(.cannotConnectToHost)
         for endpoint in endpoints {
             do {
-                let (data, response) = try await URLSession.shared.data(from: endpoint)
+                var request = URLRequest(url: endpoint)
+                request.timeoutInterval = 3
+                let (data, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode) else {
                     lastError = URLError(.badServerResponse)

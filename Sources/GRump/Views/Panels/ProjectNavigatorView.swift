@@ -226,6 +226,7 @@ struct ProjectNavigatorView: View {
     @State private var showNewFolderDialog = false
     @State private var newItemName = ""
     @State private var newItemParentPath = ""
+    @State private var inlineChatFilePath: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -317,12 +318,34 @@ struct ProjectNavigatorView: View {
                                 onNewFolder: { parentPath in
                                     newItemParentPath = parentPath
                                     showNewFolderDialog = true
+                                },
+                                onAskAbout: { path in
+                                    withAnimation(Anim.spring) {
+                                        inlineChatFilePath = path
+                                    }
                                 }
                             )
                         }
                     }
                     .padding(.vertical, Spacing.sm)
                 }
+            }
+
+            // Inline file chat
+            if let chatPath = inlineChatFilePath {
+                InlineFileChatView(
+                    filePath: chatPath,
+                    onDismiss: {
+                        withAnimation(Anim.spring) {
+                            inlineChatFilePath = nil
+                        }
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .bottom)),
+                    removal: .opacity
+                ))
+                .padding(.bottom, Spacing.md)
             }
         }
         .background(themeManager.palette.bgDark)
@@ -402,6 +425,7 @@ struct FileNodeRow: View {
     var onOpenFile: (String) -> Void
     var onNewFile: (String) -> Void
     var onNewFolder: (String) -> Void
+    var onAskAbout: ((String) -> Void)?
     @State private var isHovered = false
     @State private var isRenaming = false
     @State private var renameName = ""
@@ -438,7 +462,9 @@ struct FileNodeRow: View {
                     })
                     .font(Typography.bodySmall)
                     .textFieldStyle(.plain)
+                    #if os(macOS)
                     .onExitCommand { isRenaming = false }
+                    #endif
                 } else {
                     Text(node.name)
                         .font(Typography.bodySmall)
@@ -501,6 +527,9 @@ struct FileNodeRow: View {
                     }) {
                         Label("Open in Xcode", systemImage: "hammer")
                     }
+                    Button(action: { onAskAbout?(node.path) }) {
+                        Label("Ask G-Rump…", systemImage: "bubble.left")
+                    }
                 }
                 Divider()
                 Button(role: .destructive, action: { fileTree.deleteItem(at: node.path) }) {
@@ -519,7 +548,8 @@ struct FileNodeRow: View {
                         fileTree: fileTree,
                         onOpenFile: onOpenFile,
                         onNewFile: onNewFile,
-                        onNewFolder: onNewFolder
+                        onNewFolder: onNewFolder,
+                        onAskAbout: onAskAbout
                     )
                 }
             }

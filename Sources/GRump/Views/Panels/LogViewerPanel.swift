@@ -61,7 +61,9 @@ final class LogService: ObservableObject {
     @Published var filterLevel: LogEntry.LogLevel?
     @Published var filterText: String = ""
 
+    #if os(macOS)
     private var logProcess: Process?
+    #endif
 
     var filteredEntries: [LogEntry] {
         var result = entries
@@ -82,6 +84,7 @@ final class LogService: ObservableObject {
         stopStreaming()
         isStreaming = true
 
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/log")
         process.arguments = ["stream", "--style", "compact", "--level", "info"]
@@ -105,11 +108,14 @@ final class LogService: ObservableObject {
 
         try? process.run()
         logProcess = process
+        #endif
     }
 
     func stopStreaming() {
+        #if os(macOS)
         logProcess?.terminate()
         logProcess = nil
+        #endif
         isStreaming = false
     }
 
@@ -194,7 +200,9 @@ final class LogService: ObservableObject {
     }
 
     deinit {
+        #if os(macOS)
         logProcess?.terminate()
+        #endif
     }
 }
 

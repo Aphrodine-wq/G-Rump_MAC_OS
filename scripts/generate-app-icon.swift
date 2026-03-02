@@ -86,27 +86,51 @@ struct FrownyFaceLogo: View {
 // MARK: - Icon Generator
 class IconGenerator {
     
-    static func generateIcon(size: CGFloat) -> NSImage? {
+    /// Generate an icon at exactly `pixelSize` x `pixelSize` pixels (1x scale).
+    static func generateIcon(pixelSize: Int) -> NSImage? {
+        let size = CGFloat(pixelSize)
         let logo = FrownyFaceLogo(size: size)
         
         let hostingView = NSHostingView(rootView: logo)
         hostingView.frame = CGRect(x: 0, y: 0, width: size, height: size)
+        hostingView.layoutSubtreeIfNeeded()
         
-        let rep = bitmapImageRepFromView(hostingView)
-        let image = NSImage(size: NSSize(width: size, height: size))
+        // Create a bitmap at exactly the requested pixel dimensions (1x scale)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelSize,
+            pixelsHigh: pixelSize,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .calibratedRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return nil }
+        
+        // Set the rep size to match pixel size (1x scale — no Retina doubling)
+        rep.size = NSSize(width: pixelSize, height: pixelSize)
+        
+        NSGraphicsContext.saveGraphicsState()
+        guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else {
+            NSGraphicsContext.restoreGraphicsState()
+            return nil
+        }
+        NSGraphicsContext.current = ctx
+        
+        // Clear to transparent
+        NSColor.clear.set()
+        NSBezierPath.fill(NSRect(x: 0, y: 0, width: pixelSize, height: pixelSize))
+        
+        // Render the view
+        hostingView.cacheDisplay(in: hostingView.bounds, to: rep)
+        
+        NSGraphicsContext.restoreGraphicsState()
+        
+        let image = NSImage(size: NSSize(width: pixelSize, height: pixelSize))
         image.addRepresentation(rep)
-        
         return image
-    }
-    
-    static func bitmapImageRepFromView(_ view: NSView) -> NSBitmapImageRep {
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-        view.layoutSubtreeIfNeeded()
-        
-        let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
-        view.cacheDisplay(in: view.bounds, to: rep)
-        
-        return rep
     }
     
     static func saveImage(_ image: NSImage, to path: String) -> Bool {
@@ -127,26 +151,84 @@ class IconGenerator {
 }
 
 // MARK: - Main Execution
-let iconSizes: [CGFloat] = [16, 32, 64, 128, 256, 512, 1024]
+
+// macOS App Icon slots: (point size, scale, required pixel size)
+// 16x16 @1x=16, @2x=32
+// 32x32 @1x=32, @2x=64
+// 128x128 @1x=128, @2x=256
+// 256x256 @1x=256, @2x=512
+// 512x512 @1x=512, @2x=1024
+
+struct IconSlot {
+    let pointSize: Int
+    let scale: Int
+    var pixelSize: Int { pointSize * scale }
+    var filename: String {
+        if scale == 1 {
+            return "icon_\(pointSize)x\(pointSize).png"
+        }
+        return "icon_\(pointSize)x\(pointSize)@2x.png"
+    }
+}
+
+let slots: [IconSlot] = [
+    IconSlot(pointSize: 16, scale: 1),
+    IconSlot(pointSize: 16, scale: 2),
+    IconSlot(pointSize: 32, scale: 1),
+    IconSlot(pointSize: 32, scale: 2),
+    IconSlot(pointSize: 128, scale: 1),
+    IconSlot(pointSize: 128, scale: 2),
+    IconSlot(pointSize: 256, scale: 1),
+    IconSlot(pointSize: 256, scale: 2),
+    IconSlot(pointSize: 512, scale: 1),
+    IconSlot(pointSize: 512, scale: 2),
+]
+
 let outputDir = "Sources/GRump/Resources/Assets.xcassets/AppIcon.appiconset"
 
-print("Generating G-Rump app icons...")
+print("Generating G-Rump app icons (correct pixel sizes)...")
 
-for size in iconSizes {
-    print("Generating \(Int(size))x\(Int(size)) icon...")
+for slot in slots {
+    print("Generating \(slot.filename) (\(slot.pixelSize)x\(slot.pixelSize) px)...")
     
-    if let image = IconGenerator.generateIcon(size: size) {
-        let filename = "\(Int(size)).png"
-        let path = "\(outputDir)/\(filename)"
+    if let image = IconGenerator.generateIcon(pixelSize: slot.pixelSize) {
+        let path = "\(outputDir)/\(slot.filename)"
         
         if IconGenerator.saveImage(image, to: path) {
-            print("✅ Saved \(filename)")
+            print("✅ Saved \(slot.filename) — \(slot.pixelSize)x\(slot.pixelSize) pixels")
         } else {
-            print("❌ Failed to save \(filename)")
+            print("❌ Failed to save \(slot.filename)")
         }
     } else {
-        print("❌ Failed to generate \(Int(size))x\(Int(size)) icon")
+        print("❌ Failed to generate \(slot.filename)")
     }
+}
+
+// Generate Contents.json
+let contentsJSON = """
+{
+  "images": [
+    {"filename": "icon_16x16.png", "idiom": "mac", "scale": "1x", "size": "16x16"},
+    {"filename": "icon_16x16@2x.png", "idiom": "mac", "scale": "2x", "size": "16x16"},
+    {"filename": "icon_32x32.png", "idiom": "mac", "scale": "1x", "size": "32x32"},
+    {"filename": "icon_32x32@2x.png", "idiom": "mac", "scale": "2x", "size": "32x32"},
+    {"filename": "icon_128x128.png", "idiom": "mac", "scale": "1x", "size": "128x128"},
+    {"filename": "icon_128x128@2x.png", "idiom": "mac", "scale": "2x", "size": "128x128"},
+    {"filename": "icon_256x256.png", "idiom": "mac", "scale": "1x", "size": "256x256"},
+    {"filename": "icon_256x256@2x.png", "idiom": "mac", "scale": "2x", "size": "256x256"},
+    {"filename": "icon_512x512.png", "idiom": "mac", "scale": "1x", "size": "512x512"},
+    {"filename": "icon_512x512@2x.png", "idiom": "mac", "scale": "2x", "size": "512x512"}
+  ],
+  "info": {"author": "xcode", "version": 1}
+}
+"""
+
+let contentsPath = "\(outputDir)/Contents.json"
+do {
+    try contentsJSON.write(toFile: contentsPath, atomically: true, encoding: .utf8)
+    print("✅ Updated Contents.json")
+} catch {
+    print("❌ Failed to write Contents.json: \(error)")
 }
 
 print("Icon generation complete!")

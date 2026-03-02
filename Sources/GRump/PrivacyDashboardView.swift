@@ -29,6 +29,9 @@ struct PrivacyDashboardView: View {
 
             // On-device status
             onDeviceCard
+
+            // Privacy manifest generator
+            privacyManifestCard
         }
     }
 
@@ -284,6 +287,59 @@ struct PrivacyDashboardView: View {
             RoundedRectangle(cornerRadius: Radius.xxl, style: .continuous)
                 .stroke(themeManager.palette.borderCrisp, lineWidth: Border.thin)
         )
+    }
+
+    // MARK: - Privacy Manifest Card
+
+    private var privacyManifestCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxl) {
+            sectionHeader("Privacy Manifest", icon: "doc.text.fill", color: themeManager.palette.effectiveAccent)
+
+            Text("Generate a PrivacyInfo.xcprivacy manifest for your project, documenting API usage and data collection practices for App Store compliance.")
+                .font(Typography.bodySmall)
+                .foregroundColor(themeManager.palette.textMuted)
+
+            Button(action: generatePrivacyManifest) {
+                HStack(spacing: Spacing.md) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(Typography.bodyMedium)
+                    Text("Generate Privacy Manifest")
+                        .font(Typography.bodySmallSemibold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, Spacing.xxl)
+                .padding(.vertical, Spacing.lg)
+                .background(themeManager.palette.effectiveAccent)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.standard, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(Spacing.huge)
+        .background(themeManager.palette.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.xxl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.xxl, style: .continuous)
+                .stroke(themeManager.palette.borderCrisp, lineWidth: Border.thin)
+        )
+    }
+
+    private func generatePrivacyManifest() {
+        Task {
+            do {
+                try await PrivacyManifestGenerator.shared.analyzeProject(at: URL(fileURLWithPath: "."))
+                let manifest = PrivacyManifestGenerator.shared.generatedManifest?.generateJSON() ?? "{}"
+                #if os(macOS)
+                let savePanel = NSSavePanel()
+                savePanel.nameFieldStringValue = "PrivacyInfo.xcprivacy"
+                savePanel.allowedContentTypes = [.xml]
+                if savePanel.runModal() == .OK, let url = savePanel.url {
+                    try manifest.write(to: url, atomically: true, encoding: .utf8)
+                }
+                #endif
+            } catch {
+                GRumpLogger.capture.error("Privacy manifest generation failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Helpers

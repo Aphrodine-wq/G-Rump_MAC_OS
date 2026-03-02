@@ -1,0 +1,734 @@
+{
+  "project": "G-Rump",
+  "branchName": "ralph/deployment-hardening",
+  "description": "Close all 70 gaps identified in DEPLOYMENT-ANALYSIS.md: security hardening, legal compliance, broken feature fixes, distribution pipeline, backend hardening, website launch blockers, test coverage, and accessibility.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Bind MCP server to 127.0.0.1 and add token authentication",
+      "description": "As a user, I want the MCP server to only listen on localhost and require a token so that remote and unauthorized processes cannot access my tools.",
+      "acceptanceCriteria": [
+        "In MCPServerHost.start(), set NWParameters.requiredLocalEndpoint to NWEndpoint.hostPort(host: .ipv4(.loopback), port: ...) so the listener binds to 127.0.0.1 only",
+        "Add a static let authToken = UUID().uuidString property on MCPServerHost that is generated once at process start",
+        "Log the token at startup via GRumpLogger so the user can copy it",
+        "In handleRequest(), before processing any tools/call request, check for an 'auth_token' field in the JSON-RPC params; return JSON-RPC error -32600 if missing or wrong",
+        "tools/list remains accessible without auth (so clients can discover available tools)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Security blocker S1 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-002",
+      "title": "Remove dangerous tools from MCP server and add path traversal protection",
+      "description": "As a user, I want the MCP server to not expose get_env or run_command and to restrict file tools to the workspace root.",
+      "acceptanceCriteria": [
+        "Remove 'run_command' from builtInToolDefs entirely (not just reject at dispatch time)",
+        "Remove 'get_env' from builtInToolDefs entirely",
+        "In the file-based tool handlers (read_file, write_file, edit_file, list_directory, search_files, grep_search), resolve the path and check it starts with the workspace root using resolvePath() and URL.standardized",
+        "If a path escapes the workspace root (e.g. ../../etc/passwd), return an error message 'Path is outside workspace root'",
+        "Add a workspaceRoot property to MCPServerHost that defaults to FileManager.default.currentDirectoryPath",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Security blockers S1/S3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-003",
+      "title": "Route run_command through exec approval pipeline",
+      "description": "As a user, I want run_command to go through the same security approval workflow as system_run so my configured security level is respected.",
+      "acceptanceCriteria": [
+        "In ChatViewModel+ToolExecution.swift, change the run_command case to call executeSystemRun(args) instead of calling runShellCommand() directly",
+        "The args dictionary for run_command uses key 'command' while system_run uses key 'command' — verify they match or remap",
+        "If the user's exec approval config denies the command, run_command returns the denial message (same as system_run)",
+        "If the user's exec approval config allows the command, run_command executes normally",
+        "Existing system_run behavior is unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Security blocker S2 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-004",
+      "title": "Convert shell helpers to Process() argument arrays",
+      "description": "As a user, I want shell tool helpers to use Process() with argument arrays instead of string interpolation to prevent command injection.",
+      "acceptanceCriteria": [
+        "executeListProcesses: Use Process() with launchPath /bin/ps and arguments ['-eo', 'pid,comm'], then filter results in Swift code using String.contains instead of piping through grep",
+        "executeWhich: Use Process() with launchPath /usr/bin/which and arguments [name] — validate name contains only alphanumeric, dash, underscore, period characters first",
+        "executeDiskUsage: Use Process() with launchPath /bin/df and arguments ['-h', path] instead of shell string",
+        "executeSpotlightSearch in ToolExec+AppleNative.swift: Use Process() with launchPath /usr/bin/mdfind and arguments array instead of converting back to shell string; limit results in Swift code instead of piping through head",
+        "All four functions produce the same output format as before",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Security blocker S3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-005",
+      "title": "Fix backend credit deduction race condition with atomic SQL",
+      "description": "As a user, I want credit deduction to be atomic so concurrent requests cannot over-spend my balance.",
+      "acceptanceCriteria": [
+        "In backend/proxy.js, replace the read-compute-write credit deduction with a single atomic SQL UPDATE: UPDATE users SET credits_balance = MAX(0, credits_balance - ?) WHERE id = ? AND credits_balance >= ?",
+        "Check the number of rows affected — if 0 rows updated, the user has insufficient credits",
+        "Remove the separate SELECT that reads the current balance before deducting",
+        "Add a pre-request credit balance check: before proxying to OpenRouter, query the user's credits_balance and reject with 402 if balance <= 0",
+        "cd backend && npm test passes (existing tests still pass)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Security blocker S4 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-006",
+      "title": "Fix DB initialization ordering and add global Express error handler",
+      "description": "As a developer, I want the database to be initialized before any route runs and unhandled errors to return clean JSON responses.",
+      "acceptanceCriteria": [
+        "In backend/server.js, call await initDatabase() at module load time (top-level await) OR move ensureDb() middleware registration to before all route definitions",
+        "Add a global Express error handler at the bottom of server.js after all routes: app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'Internal server error' }); })",
+        "The error handler must NOT leak stack traces — only log them server-side",
+        "Health check endpoint at /api/health no longer exposes whether Stripe/OpenRouter keys are configured — only report 'configured: true/false' without key details",
+        "cd backend && npm test passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Backend blockers B1/B4 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-007",
+      "title": "Enforce wss:// for non-localhost OpenClaw URLs and validate scheme",
+      "description": "As a user, I want OpenClaw connections to non-localhost servers to require encrypted WebSocket (wss://) so my data is not sent in plaintext.",
+      "acceptanceCriteria": [
+        "In OpenClawService.swift connect(), after parsing the URL, check url.scheme",
+        "If url.host is not '127.0.0.1' and not 'localhost' and not '::1', require url.scheme == 'wss'",
+        "If a remote URL uses 'ws://' scheme, set connectionState = .error('Remote connections require wss:// (encrypted)')' and return without connecting",
+        "Local URLs (127.0.0.1, localhost, ::1) are allowed with ws:// or wss://",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Security issue from Section 3 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-008",
+      "title": "Remove fabricated aggregate rating from website JSON-LD",
+      "description": "As a product owner, I want the website's structured data to not contain fabricated review counts that violate Google's guidelines.",
+      "acceptanceCriteria": [
+        "In RE/website/src/app/layout.tsx, remove the entire aggregateRating object from the JSON-LD schema (ratingValue: '4.9', ratingCount: '2400')",
+        "Keep the rest of the JSON-LD Organization schema intact",
+        "No TypeScript errors after the change"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Legal blocker L3/W3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-009",
+      "title": "Complete privacy manifest with missing required entries",
+      "description": "As an app developer, I want the privacy manifest to declare all required-reason APIs so the app is not rejected by Apple.",
+      "acceptanceCriteria": [
+        "In Sources/GRump/Resources/PrivacyInfo.xcprivacy, add NSPasteboard access declaration under NSPrivacyAccessedAPITypes with reason code 'CA92.1' (user-initiated clipboard paste)",
+        "Add NSPrivacyCollectedDataType entry for 'NSPrivacyCollectedDataTypeUserContent' with purpose 'NSPrivacyCollectedDataTypePurposeAppFunctionality' and linked to user = true",
+        "Add NSPrivacyCollectedDataType entry for 'NSPrivacyCollectedDataTypeOtherDiagnosticData' covering active app name tracking",
+        "The plist remains valid XML",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Privacy blocker from Section 3 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-010",
+      "title": "Flip ambient monitoring defaults to opt-in",
+      "description": "As a privacy-conscious user, I want ambient monitoring features to be opt-in by default so my activity is not tracked without consent.",
+      "acceptanceCriteria": [
+        "In AmbientMonitor.swift, change appTrackingEnabled default from true to false",
+        "Change windowTitleTrackingEnabled default from true to false",
+        "Change clipboardMonitorEnabled default (verify it's already false, keep it false)",
+        "The onboarding flow or settings should make it clear these can be enabled",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Privacy/GDPR compliance from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-011",
+      "title": "Implement WritingToolsService with real AI calls",
+      "description": "As a user, I want the Writing Tools feature to produce real AI-generated text instead of hardcoded placeholder strings.",
+      "acceptanceCriteria": [
+        "In WritingToolsService.swift, replace the hardcoded '[AI suggestion based on: ...]' return in generateText() with a real call to the AI service",
+        "Use MultiProviderAIService or OpenRouterService to send the prompt and context as a chat completion request",
+        "Use the user's configured model (from ModelRouter or AppStorage)",
+        "If no API key is configured, return a clear error message: 'Please configure an API key in Settings to use Writing Tools'",
+        "If the AI call fails, return 'Writing Tools error: [error description]' instead of silently returning placeholder",
+        "Functions that call generateText() (generateCommitMessage, generateDocumentation, generateComments, improveText, generateReleaseNotes, generateAPIDocumentation) continue to work as before since they delegate to generateText()",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "App quality blocker A1 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-012",
+      "title": "Wire code font setting to CodeBlockView and MarkdownTextView",
+      "description": "As a user, I want my chosen code font (from Settings) to be applied in code blocks and markdown code spans.",
+      "acceptanceCriteria": [
+        "Read @AppStorage('CodeFont') in DesignTokens.swift or a new computed property that returns the user's chosen font name",
+        "In Typography code font properties (codeLarge, code, codeSmall, codeMicro), use the stored font name if set, falling back to .monospaced",
+        "CodeBlockView.swift reads the code font setting and applies it to its text content",
+        "MarkdownTextView.swift applies the code font setting to inline code spans",
+        "If the chosen font name (e.g. 'Fira Code', 'JetBrains Mono') is not installed, fall back gracefully to system monospace",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "App quality blocker A2 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-013",
+      "title": "Wire line spacing setting to MarkdownTextView",
+      "description": "As a user, I want my chosen line spacing (from Settings) to be applied in message text instead of using hardcoded values.",
+      "acceptanceCriteria": [
+        "In MarkdownTextView.swift, replace hardcoded .lineSpacing(3) and .lineSpacing(2) with a value derived from @AppStorage('LineSpacing')",
+        "Define a reasonable range for line spacing (e.g. 0.0 to 10.0) with default of 3.0 for paragraphs and 2.0 for list items",
+        "The stored value acts as a multiplier or direct value for paragraph line spacing",
+        "List items use a proportionally smaller spacing (e.g. stored value * 0.67)",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "App quality blocker A3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-014",
+      "title": "Fix git shortcuts popover commit command and pipe reading",
+      "description": "As a user, I want git shortcuts to work correctly — commit should include a message flag and output should be captured.",
+      "acceptanceCriteria": [
+        "In StatusBarView.swift GitShortcutsPopover, change the Commit shortcut from runGitCommand('commit') to prompt the user for a commit message first or use runGitCommand('commit -m \"<message>\"')",
+        "Alternative: change Commit to run 'commit --allow-empty-message -m \"\"' as a quick commit, or show a text field for the message",
+        "In runGitCommand(), read standardOutput and standardError pipes after process terminates",
+        "Display the git command output in a result area or log it via GRumpLogger",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "App quality blocker A5 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-015",
+      "title": "Fix notification approval handler to use specific approvalId",
+      "description": "As a user, I want notification-based approvals to resolve the correct pending approval instead of a random one.",
+      "acceptanceCriteria": [
+        "In NotificationService.swift, set pendingApprovalId when a new approval notification is sent (in notifyApprovalNeeded or equivalent)",
+        "In the notification response handler (UNUserNotificationCenterDelegate), extract the approvalId from the notification's userInfo dictionary",
+        "Use the extracted approvalId to resolve the specific pending approval, not whatever happens to be current",
+        "Clear pendingApprovalId after the approval is resolved",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "App quality issue from Section 5 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-016",
+      "title": "Start ConnectionMonitor at app lifecycle and gate streaming",
+      "description": "As a user, I want the connection monitor to start when the app launches and streaming to be blocked when offline.",
+      "acceptanceCriteria": [
+        "In GRumpApp.swift, call ConnectionMonitor.shared.start() during app initialization (alongside other service starts like globalHotkey.start(), proactiveEngine.bootstrap())",
+        "Do NOT start it only from ChatTopBarView.onAppear — it must start regardless of UI state",
+        "In ChatViewModel+Streaming.swift, before calling the streaming API, check ConnectionMonitor.shared.canStream",
+        "If canStream is false, set an error message like 'You appear to be offline. Check your internet connection and try again.' instead of starting the stream",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "App quality items 23/24 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-017",
+      "title": "Fix WritingTools availability check for correct OS versions",
+      "description": "As a developer, I want the WritingTools availability check to require macOS 15+ / iOS 18+ since that's when Apple's Writing Tools framework was introduced.",
+      "acceptanceCriteria": [
+        "In WritingToolsService.swift, change checkWritingToolsAvailability() to return true only on macOS 15+ or iOS 18+, not macOS 14+",
+        "Use #available(macOS 15, iOS 18, *) instead of the current macOS 14 check",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "App quality issue from Section 5 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-018",
+      "title": "Replace Google OAuth placeholder in Info.plist",
+      "description": "As a developer, I want Info.plist to not contain a literal placeholder string that gets registered as a URL scheme.",
+      "acceptanceCriteria": [
+        "In Sources/GRump/Info.plist, find CFBundleURLSchemes containing 'com.googleusercontent.apps.YOUR_CLIENT_ID'",
+        "Remove the entire CFBundleURLTypes entry that contains this placeholder",
+        "Add a comment in the plist or a note in CLAUDE.md that Google OAuth URL scheme should be added when a real client ID is obtained",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "Distribution blocker D2 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-019",
+      "title": "Synchronize version numbers across Info.plist, project.yml, and create-release.sh",
+      "description": "As a developer, I want all version references to agree so builds and releases are consistent.",
+      "acceptanceCriteria": [
+        "Set version to 2.0.0 in Info.plist (CFBundleShortVersionString) — keep existing value",
+        "Update project.yml MARKETING_VERSION from 1.0.0 to 2.0.0",
+        "Update scripts/create-release.sh VERSION variable from v1.0.0 to v2.0.0",
+        "All three files now report the same version: 2.0.0",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Distribution blocker D3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-020",
+      "title": "Fix Settings Check for Updates toggle to use Sparkle",
+      "description": "As a user, I want the 'Check for updates on launch' toggle to actually trigger Sparkle's update check instead of opening a browser.",
+      "acceptanceCriteria": [
+        "In Settings+TabViews.swift (or equivalent settings file), find the 'Check for updates' action",
+        "Replace the current NSWorkspace.shared.open(URL(string: 'https://www.g-rump.com/releases')!) call with a call to SparkleUpdateService.shared.checkForUpdates() (or equivalent)",
+        "If SparkleUpdateService is not configured (no SUFeedURL), show an alert saying 'Auto-update is not yet configured'",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Distribution item 28 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-021",
+      "title": "Parameterize create-release.sh for reuse",
+      "description": "As a developer, I want create-release.sh to accept version and repo as parameters instead of hardcoded values.",
+      "acceptanceCriteria": [
+        "Accept VERSION as first argument ($1) with fallback to current hardcoded value",
+        "Accept REPO as second argument ($2) with fallback to current hardcoded value",
+        "Add usage message if --help is passed",
+        "Update the REPO variable from 'Aphrodine-wq/G-Rump_MAC_OS' to match the actual repository",
+        "Script still works when called without arguments (uses defaults)"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Distribution item 31 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-022",
+      "title": "Handle invoice.payment_succeeded Stripe webhook",
+      "description": "As a paying user, I want my subscription to remain active after renewal so my tier and credits update correctly.",
+      "acceptanceCriteria": [
+        "In backend/stripe.js webhook handler, add a case for 'invoice.payment_succeeded'",
+        "Extract customer ID from the invoice event and look up the user",
+        "Update subscription_status to 'active' and refresh subscription_period_end from the invoice's period_end",
+        "If the invoice has a subscription, update the user's tier based on the subscription's price ID",
+        "cd backend && npm test passes"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Backend blocker B2 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-023",
+      "title": "Handle customer.subscription.paused Stripe webhook",
+      "description": "As a product owner, I want paused subscriptions to correctly downgrade the user's tier.",
+      "acceptanceCriteria": [
+        "In backend/stripe.js webhook handler, add a case for 'customer.subscription.paused'",
+        "Extract customer ID and look up user",
+        "Set subscription_status to 'paused' and tier to 'free'",
+        "Also handle 'customer.subscription.past_due' the same way (set status to 'past_due')",
+        "cd backend && npm test passes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Backend item from Section 4 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-024",
+      "title": "Validate Stripe price IDs on startup and remove invalid fallbacks",
+      "description": "As a developer, I want the backend to fail fast if Stripe price IDs are missing rather than silently using invalid placeholder IDs.",
+      "acceptanceCriteria": [
+        "In backend/stripe.js, remove the fallback strings like 'price_starter_monthly' from the PRICE_IDS object",
+        "Add a validateStripeConfig() function that checks if all required price env vars are set when STRIPE_SECRET_KEY is present",
+        "If STRIPE_SECRET_KEY is set but any STRIPE_PRICE_* env var is missing, throw an error at startup with a clear message listing which vars are missing",
+        "If STRIPE_SECRET_KEY is not set, skip validation (billing disabled mode)",
+        "cd backend && npm test passes"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Backend blocker B3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-025",
+      "title": "Validate avatarUrl and add compression middleware",
+      "description": "As a developer, I want user-submitted avatar URLs to be validated and API responses to be compressed.",
+      "acceptanceCriteria": [
+        "In backend/server.js PATCH /api/me route, validate avatarUrl with new URL(avatarUrl) wrapped in try/catch",
+        "Reject avatarUrl if scheme is not 'https' — return 400 with message 'Avatar URL must use HTTPS'",
+        "Reject avatarUrl if the URL constructor throws — return 400 with message 'Invalid avatar URL'",
+        "Add compression middleware: npm install compression, then app.use(compression()) after helmet middleware",
+        "cd backend && npm test passes"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": "Backend items 37/15 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-026",
+      "title": "Add migration version table, enable foreign keys, and add missing indexes",
+      "description": "As a developer, I want database migrations to be tracked, foreign keys enforced, and queries indexed.",
+      "acceptanceCriteria": [
+        "In backend/db.js initDatabase(), add PRAGMA foreign_keys = ON after client creation",
+        "Create a migrations table: CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT DEFAULT (datetime('now')))",
+        "Wrap existing migration functions in version checks (e.g. version 1 = initial schema, version 2 = profile columns, version 3 = stripe columns)",
+        "Add CREATE INDEX IF NOT EXISTS idx_usage_log_created ON usage_log(created_at)",
+        "Add CREATE INDEX IF NOT EXISTS idx_usage_log_user_created ON usage_log(user_id, created_at)",
+        "cd backend && npm test passes"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "Backend items 38/39/40 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-027",
+      "title": "Add Vercel cron for log pruning and increase maxDuration",
+      "description": "As a developer, I want old usage logs to be pruned on a schedule and streaming requests to have enough time to complete.",
+      "acceptanceCriteria": [
+        "In backend/vercel.json, increase maxDuration from 60 to 300",
+        "Add a crons configuration in vercel.json: { 'crons': [{ 'path': '/api/cron/prune', 'schedule': '0 3 * * *' }] }",
+        "Create backend/api/cron/prune.js (or add a /api/cron/prune route to server.js) that calls pruneOldUsageLogs()",
+        "The cron endpoint should verify it's called by Vercel's cron system (check CRON_SECRET header or similar)",
+        "Remove the setInterval-based prune logic from server.js since it never runs on Vercel",
+        "cd backend && npm test passes"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": "Backend items 41/42 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-028",
+      "title": "Replace model tier string-includes with maintained allowlist",
+      "description": "As a developer, I want model tier classification to use an explicit allowlist so new models don't silently fall to the wrong pricing tier.",
+      "acceptanceCriteria": [
+        "In backend/proxy.js, replace the model.includes(':free') and model.includes('claude-opus') pattern with a MODEL_TIERS object",
+        "Define MODEL_TIERS with explicit model name patterns: { frontier: ['claude-opus', 'claude-sonnet', 'gpt-4o', 'kimi-k2'], free: [':free'], fast: [] } where fast is the default",
+        "Create a getModelTier(modelName) function that checks against the allowlist",
+        "Use the tier-based credit multiplier from db.js CREDITS_PER_1K_BY_MODEL_TIER instead of flat 1 credit per 1K tokens",
+        "Log a warning when an unknown model falls to default tier so it can be classified later",
+        "cd backend && npm test passes"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": "Backend item 45 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-029",
+      "title": "Add Stripe idempotency keys to API calls",
+      "description": "As a developer, I want Stripe API calls to use idempotency keys so network retries don't create duplicate charges.",
+      "acceptanceCriteria": [
+        "In backend/stripe.js, add idempotencyKey to stripe.checkout.sessions.create() calls — use a hash of userId + priceId + timestamp",
+        "Add idempotencyKey to stripe.customers.create() calls — use a hash of userId + email",
+        "Import crypto module and create a helper: generateIdempotencyKey(...parts) that returns crypto.createHash('sha256').update(parts.join(':')).digest('hex')",
+        "cd backend && npm test passes"
+      ],
+      "priority": 29,
+      "passes": true,
+      "notes": "Backend item 47 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-030",
+      "title": "Add structured JSON logging with request IDs",
+      "description": "As a developer, I want backend logs to be structured JSON with request IDs for easier debugging and log aggregation.",
+      "acceptanceCriteria": [
+        "Create a logger utility in backend/logger.js that wraps console.log/error/warn with JSON output: { timestamp, level, requestId, message, ...extra }",
+        "Add request ID middleware early in server.js: generate a UUID per request and attach it to req.requestId",
+        "Replace key console.log calls in proxy.js, auth.js, and stripe.js with the structured logger",
+        "Include requestId in error responses so users can reference it in support requests",
+        "cd backend && npm test passes"
+      ],
+      "priority": 30,
+      "passes": true,
+      "notes": "Backend item 43 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-031",
+      "title": "Add JWT refresh endpoint",
+      "description": "As a user, I want my session to be extended without re-authenticating with Google every 7 days.",
+      "acceptanceCriteria": [
+        "In backend/auth.js, add a refreshToken(oldToken) function that verifies the old token, checks it's not expired by more than 24 hours, and issues a new token",
+        "In backend/server.js, add POST /api/auth/refresh route that accepts { token } in body and returns { token: newToken }",
+        "The refresh route requires the old token to be valid (or recently expired within 24h grace period)",
+        "New token has the same 7-day expiry starting from now",
+        "Rate limit the refresh endpoint to prevent abuse (10 per hour per user)",
+        "cd backend && npm test passes"
+      ],
+      "priority": 31,
+      "passes": true,
+      "notes": "Backend item 46 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-032",
+      "title": "Create Privacy Policy page for website",
+      "description": "As a user, I want to read the privacy policy before using the product, and as a product owner I need it for legal compliance.",
+      "acceptanceCriteria": [
+        "Create RE/website/src/app/privacy/page.tsx with a comprehensive privacy policy page",
+        "Cover: data collected (chat messages sent to AI providers, usage analytics, account info), data storage (Turso DB, Keychain for API keys), third-party services (OpenRouter, Anthropic, OpenAI, Stripe, Google Sign-In), data retention (90-day usage logs), user rights (export via /api/me/export, deletion via DELETE /api/me), cookies, children's privacy (no users under 13)",
+        "Include the company name and contact email from existing legal references",
+        "Update the footer Privacy Policy link from href='#' to href='/privacy'",
+        "Page renders without TypeScript errors"
+      ],
+      "priority": 32,
+      "passes": true,
+      "notes": "Legal blocker L1 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-033",
+      "title": "Create Terms of Service page for website",
+      "description": "As a product owner, I need terms of service for legal compliance with Stripe, Apple, and Google requirements.",
+      "acceptanceCriteria": [
+        "Create RE/website/src/app/terms/page.tsx with terms of service",
+        "Cover: acceptable use (no abuse of AI tools, no illegal activities), payment terms (subscription billing, credit purchases, refund policy), intellectual property (user owns their content, AI output disclaimer), limitation of liability, termination, governing law",
+        "Reference the privacy policy page",
+        "Update the footer Terms of Service link from href='#' to href='/terms'",
+        "Page renders without TypeScript errors"
+      ],
+      "priority": 33,
+      "passes": true,
+      "notes": "Legal blocker L2 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-034",
+      "title": "Fix website social links and download button hrefs",
+      "description": "As a website visitor, I want social media links and download buttons to point to real URLs instead of href='#'.",
+      "acceptanceCriteria": [
+        "In the website footer component, replace Twitter/X href='#' with a placeholder URL like 'https://twitter.com/grumpapp' (or remove the link if no account exists and add a comment)",
+        "Replace Discord href='#' with a placeholder or remove",
+        "Replace GitHub href='#' with the actual repository URL if public, or remove",
+        "For 'Download for Mac' CTAs, set href to '/releases' or a direct download URL placeholder with a TODO comment",
+        "No href='#' links remain in the footer or hero sections",
+        "No TypeScript errors"
+      ],
+      "priority": 34,
+      "passes": true,
+      "notes": "Website items from Section 7 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-035",
+      "title": "Add better-sqlite3 to devDependencies for backend tests",
+      "description": "As a developer, I want backend tests to work on a clean npm install by having all test dependencies declared.",
+      "acceptanceCriteria": [
+        "Run cd backend && npm install --save-dev better-sqlite3",
+        "Verify better-sqlite3 appears in backend/package.json devDependencies",
+        "cd backend && npm test passes on a clean install"
+      ],
+      "priority": 35,
+      "passes": true,
+      "notes": "Test item 64 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-036",
+      "title": "Add Stripe webhook integration tests",
+      "description": "As a developer, I want test coverage for Stripe webhook handlers so billing regressions are caught.",
+      "acceptanceCriteria": [
+        "Add a describe('Stripe Webhooks') section to backend/tests/backend.test.js (or create backend/tests/stripe.test.js)",
+        "Test checkout.session.completed: mock event with customer, subscription, metadata.userId — verify user tier is updated",
+        "Test customer.subscription.deleted: verify user tier reverts to 'free'",
+        "Test invoice.payment_failed: verify subscription_status is updated",
+        "Test invoice.payment_succeeded (the new handler from US-022): verify subscription_status and period_end are updated",
+        "All tests use in-memory SQLite (better-sqlite3), no real Stripe API calls",
+        "cd backend && npm test passes"
+      ],
+      "priority": 36,
+      "passes": true,
+      "notes": "Test item 56 from DEPLOYMENT-ANALYSIS.md. Depends on US-022, US-023, US-035"
+    },
+    {
+      "id": "US-037",
+      "title": "Add credit deduction race condition test",
+      "description": "As a developer, I want to verify that concurrent credit deductions cannot over-spend a user's balance.",
+      "acceptanceCriteria": [
+        "Add a describe('Credit Deduction') section to backend/tests/backend.test.js",
+        "Test: create user with 10 credits, call deductCredits(userId, 10) twice concurrently using Promise.all, verify final balance is 0 (not negative)",
+        "Test: create user with 5 credits, attempt to deduct 10, verify balance is 0 and the function returns failure or partial deduction",
+        "Test: create user with 0 credits, attempt to deduct 1, verify rejection",
+        "cd backend && npm test passes"
+      ],
+      "priority": 37,
+      "passes": true,
+      "notes": "Test item 57 from DEPLOYMENT-ANALYSIS.md. Depends on US-005"
+    },
+    {
+      "id": "US-038",
+      "title": "Add backend auth middleware HTTP tests",
+      "description": "As a developer, I want to verify that protected routes reject unauthenticated and expired token requests.",
+      "acceptanceCriteria": [
+        "Add a describe('Auth Middleware') section to backend/tests/backend.test.js",
+        "Test: GET /api/me without Authorization header returns 401",
+        "Test: GET /api/me with invalid token returns 401",
+        "Test: GET /api/me with expired token returns 401",
+        "Test: GET /api/me with valid token returns 200 with user data",
+        "Use supertest or direct HTTP requests against the Express app",
+        "cd backend && npm test passes"
+      ],
+      "priority": 38,
+      "passes": true,
+      "notes": "Test item 58 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-039",
+      "title": "Add backend API route integration tests",
+      "description": "As a developer, I want integration tests covering the main API routes for reliability.",
+      "acceptanceCriteria": [
+        "Add a describe('API Routes') section to backend/tests/backend.test.js",
+        "Test: GET /api/health returns 200 with status and uptime",
+        "Test: POST /api/auth/google with invalid token returns 401",
+        "Test: PATCH /api/me with invalid avatarUrl returns 400",
+        "Test: GET /api/me/export returns user data JSON for authenticated user",
+        "Test: DELETE /api/me deletes user and cascades to usage_log",
+        "cd backend && npm test passes"
+      ],
+      "priority": 39,
+      "passes": true,
+      "notes": "Test item 63 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-040",
+      "title": "Fix SpotlightIndexer to use async API off main thread",
+      "description": "As a user, I want Spotlight indexing to not block the main thread.",
+      "acceptanceCriteria": [
+        "In SpotlightIndexer.swift indexConversation(), wrap the CSSearchableIndex call in Task.detached or move to a background queue",
+        "Use the async version of CSSearchableIndex.indexSearchableItems() if available on macOS 14+, otherwise dispatch to a background queue",
+        "Verify the function is not called on @MainActor (remove @MainActor if present, or use nonisolated)",
+        "Typecheck passes"
+      ],
+      "priority": 40,
+      "passes": true,
+      "notes": "Accessibility/quality item 70 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-041",
+      "title": "Add accessibilityLabel to StatusBarView connection dot",
+      "description": "As a VoiceOver user, I want the connection status indicator to be announced properly.",
+      "acceptanceCriteria": [
+        "In StatusBarView.swift, find the connection status dot (Circle or similar shape)",
+        "Add .accessibilityLabel() that describes the current state: 'Connected', 'Disconnected', or 'Connection degraded'",
+        "Fix the connection indicator to use ConnectionMonitor.shared.status instead of just checking platformUser != nil",
+        "Typecheck passes"
+      ],
+      "priority": 41,
+      "passes": true,
+      "notes": "Accessibility items 68 + quality fix from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-042",
+      "title": "Fix StreamErrorView to respect reduceMotion",
+      "description": "As a user with motion sensitivity, I want error animations to be reduced when I have reduceMotion enabled.",
+      "acceptanceCriteria": [
+        "In StreamErrorView.swift (or wherever the stream error card is defined), add @Environment(\\.accessibilityReduceMotion) var reduceMotion",
+        "When reduceMotion is true, replace spring/bounce animations with simple .opacity transitions",
+        "When reduceMotion is true, skip any shake or slide animations",
+        "Typecheck passes"
+      ],
+      "priority": 42,
+      "passes": true,
+      "notes": "Accessibility item 67 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-043",
+      "title": "Add VoiceOver announcements for key state changes",
+      "description": "As a VoiceOver user, I want to hear announcements when important state changes occur.",
+      "acceptanceCriteria": [
+        "When SplashScreenView completes and transitions to main content, post an AccessibilityNotification.Announcement with 'G-Rump is ready'",
+        "When StreamErrorView appears, post an announcement with the error message text",
+        "When onboarding advances to the next step, post an announcement with the step title",
+        "Use AccessibilityNotification.Announcement (macOS 14+) or UIAccessibility.post(notification:argument:) equivalent",
+        "Typecheck passes"
+      ],
+      "priority": 43,
+      "passes": true,
+      "notes": "Accessibility item 66 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-044",
+      "title": "Add consent prompt at onboarding before first AI call",
+      "description": "As a privacy-conscious user, I want to consent to my data being sent to AI providers before my first message is processed.",
+      "acceptanceCriteria": [
+        "In OnboardingView.swift, add a consent step (can be part of an existing step or a new step) that explains: 'Your messages will be sent to AI providers (OpenRouter, Anthropic, OpenAI) for processing. Your data is not used for training.'",
+        "Include a link to the privacy policy page",
+        "Add a 'I agree' button or checkbox that must be checked before proceeding",
+        "Store consent in @AppStorage('PrivacyConsentGiven') with default false",
+        "If consent is not given, do not allow sending messages (show the consent view instead)",
+        "Typecheck passes"
+      ],
+      "priority": 44,
+      "passes": true,
+      "notes": "Legal item 14 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-045",
+      "title": "Fix CI print() scan to be recursive and make SwiftLint blocking",
+      "description": "As a developer, I want CI to catch print() statements in subdirectories and SwiftLint failures to block merges.",
+      "acceptanceCriteria": [
+        "In .github/workflows/ci.yml lint job, change the print() check from grep on Sources/GRump/*.swift to grep -r on Sources/GRump/ to cover subdirectories like Views/",
+        "Remove || true from the SwiftLint command so lint failures cause the job to fail",
+        "Keep the outer if command -v swiftlint check so CI doesn't fail if SwiftLint is not installed",
+        "Force-unwrap check should exit 1 if violations found (currently informational only) — make it a warning step, not blocking"
+      ],
+      "priority": 45,
+      "passes": true,
+      "notes": "CI item from Section 8 of DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-046",
+      "title": "Reconcile domain references across codebase",
+      "description": "As a developer, I want all domain references to be consistent — using g-rump.com everywhere.",
+      "acceptanceCriteria": [
+        "Search for 'grump.app' across the entire codebase (excluding node_modules)",
+        "Replace 'grump.app' with 'g-rump.com' in LICENSE file",
+        "Replace 'legal@grump.app' with 'legal@g-rump.com' in LICENSE file",
+        "Replace any other 'grump.app' references with 'g-rump.com' (check CLAUDE.md, README.md, etc.)",
+        "Do NOT change bundle identifier 'com.grump.app' — that is different from a domain name",
+        "Typecheck passes"
+      ],
+      "priority": 46,
+      "passes": true,
+      "notes": "Legal blocker L3 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-047",
+      "title": "Add CI release artifact upload step",
+      "description": "As a developer, I want CI release builds to upload artifacts so they are not immediately discarded.",
+      "acceptanceCriteria": [
+        "In .github/workflows/ci.yml release job, add an actions/upload-artifact@v4 step after the build step",
+        "Upload the .app bundle from the build output directory",
+        "Set artifact name to 'G-Rump-${{ github.sha }}' and retention-days to 30",
+        "The release job should build a universal binary (arm64 + x86_64) matching what package.sh produces"
+      ],
+      "priority": 47,
+      "passes": true,
+      "notes": "Distribution item 32 from DEPLOYMENT-ANALYSIS.md"
+    },
+    {
+      "id": "US-048",
+      "title": "Dynamic Type support in Typography tokens",
+      "description": "As a user who needs larger text, I want G-Rump to respect my system text size setting.",
+      "acceptanceCriteria": [
+        "In DesignTokens.swift, refactor Typography static properties to use Font.system(.body), Font.system(.headline), Font.system(.caption) etc. from the system type scale instead of Font.system(size: N) with hardcoded pixel sizes",
+        "For code fonts, use @ScaledMetric to scale the base size relative to the user's text size setting",
+        "Keep the existing size relationships (heading1 > heading2 > heading3 > body > caption etc.) but use relative sizing",
+        "Add a Typography.scaled(baseSize:relativeTo:) helper if needed for custom scaling",
+        "Existing UI layouts should not break at larger text sizes (may need some .minimumScaleFactor or .lineLimit adjustments in tight spaces)",
+        "Typecheck passes"
+      ],
+      "priority": 48,
+      "passes": true,
+      "notes": "Accessibility item 65 from DEPLOYMENT-ANALYSIS.md — refactored to use system text styles (.body, .headline, .caption, etc.)"
+    }
+  ]
+}

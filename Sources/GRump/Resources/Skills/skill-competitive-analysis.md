@@ -1,6 +1,7 @@
 ---
 name: Competitive Analysis
 description: Analyze competitive landscapes, market positioning, and strategic differentiation.
+tags: [competitive-analysis, market-research, strategy, business, positioning]
 ---
 
 # Competitive Analysis
@@ -33,3 +34,15 @@ You are an expert at competitive intelligence and market analysis.
 - Focus on user outcomes, not feature counts.
 - Identify trends, not just current state.
 - Consider switching costs and lock-in for each competitor.
+
+## Anti-Patterns
+- Dismissing competitors ("they're not a real threat") without evidence
+- Feature-count comparisons without weighing feature importance
+- Ignoring indirect competitors who solve the same problem differently
+- One-time analysis without ongoing monitoring plan
+
+## Verification
+- Analysis includes at least 3 direct and 2 indirect competitors
+- Every claim is backed by observable data (pricing pages, job postings, product demos)
+- SWOT analysis is honest — includes genuine weaknesses of your own product
+- Recommendations are specific and actionable, not generic ("be more innovative")

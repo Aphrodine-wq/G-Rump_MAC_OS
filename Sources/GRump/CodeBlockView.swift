@@ -9,7 +9,12 @@ struct CodeBlockView: View {
     @EnvironmentObject var themeManager: ThemeManager
     let language: String
     let code: String
+    var filePath: String? = nil
+    var blockId: String? = nil
     @State private var copied = false
+    @State private var applied = false
+    @State private var rejected = false
+    @State private var applyError: String? = nil
     @State private var cachedLineTokens: [[SyntaxHighlighter.Token]] = []
     @Environment(\.colorScheme) private var colorScheme
 
@@ -153,17 +158,145 @@ struct CodeBlockView: View {
             }
             .frame(maxHeight: min(CGFloat(codeLines.count) * 18 + 20, 400))
             .background(bgCode)
+
+            // Apply/Reject footer bar (Cursor-style)
+            if filePath != nil, let bid = blockId {
+                applyRejectBar(blockId: bid)
+            }
         }
         .background(bgCode)
         .clipShape(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                .foregroundColor(themeManager.palette.borderCrisp.opacity(0.4))
+                .strokeBorder(
+                    applied ? Color.accentGreen.opacity(0.4) :
+                    rejected ? themeManager.palette.textMuted.opacity(0.2) :
+                    themeManager.palette.borderCrisp.opacity(0.4),
+                    lineWidth: applied || rejected ? 1 : 1
+                )
         )
+        .opacity(rejected ? 0.6 : 1.0)
         .onAppear { refreshHighlightCache() }
         .onChange(of: code) { _, _ in refreshHighlightCache() }
         .onChange(of: language) { _, _ in refreshHighlightCache() }
+    }
+
+    // MARK: - Apply/Reject Bar
+
+    @ViewBuilder
+    private func applyRejectBar(blockId: String) -> some View {
+        Divider()
+            .background(themeManager.palette.effectiveAccent.opacity(0.15))
+
+        HStack(spacing: Spacing.lg) {
+            // File path label
+            if let path = filePath {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(path)
+                        .font(Typography.codeMicro)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .foregroundColor(themeManager.palette.textMuted)
+            }
+
+            Spacer()
+
+            if let error = applyError {
+                Text(error)
+                    .font(Typography.micro)
+                    .foregroundColor(.red)
+                    .lineLimit(1)
+            }
+
+            if applied {
+                HStack(spacing: Spacing.md) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.accentGreen)
+                        .font(.system(size: 11))
+                    Text("Applied")
+                        .font(Typography.captionSmallSemibold)
+                        .foregroundColor(.accentGreen)
+
+                    Button("Undo") {
+                        undoApply(blockId: blockId)
+                    }
+                    .font(Typography.captionSmallMedium)
+                    .foregroundColor(themeManager.palette.textMuted)
+                    .buttonStyle(.plain)
+                }
+            } else if rejected {
+                HStack(spacing: Spacing.md) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(themeManager.palette.textMuted)
+                        .font(.system(size: 11))
+                    Text("Rejected")
+                        .font(Typography.captionSmallSemibold)
+                        .foregroundColor(themeManager.palette.textMuted)
+                }
+            } else {
+                HStack(spacing: Spacing.lg) {
+                    Button(action: { rejectCode(blockId: blockId) }) {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text("Reject")
+                                .font(Typography.captionSmallMedium)
+                        }
+                        .foregroundColor(themeManager.palette.textMuted)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+
+                    Button(action: { applyCode(blockId: blockId) }) {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("Apply")
+                                .font(Typography.captionSmallSemibold)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, Spacing.xl)
+                        .padding(.vertical, Spacing.sm)
+                        .background(themeManager.palette.effectiveAccent)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.xxxl)
+        .padding(.vertical, Spacing.lg)
+        .background(bgHeader)
+    }
+
+    private func applyCode(blockId: String) {
+        guard let path = filePath else { return }
+        let result = CodeApplyService.shared.apply(blockId: blockId, code: code, toFile: path)
+        if let error = result {
+            applyError = error
+        } else {
+            withAnimation(Anim.springSnap) { applied = true }
+        }
+    }
+
+    private func rejectCode(blockId: String) {
+        CodeApplyService.shared.reject(blockId: blockId)
+        withAnimation(Anim.springSnap) { rejected = true }
+    }
+
+    private func undoApply(blockId: String) {
+        guard let path = filePath else { return }
+        let result = CodeApplyService.shared.undo(blockId: blockId, filePath: path)
+        if let error = result {
+            applyError = error
+        } else {
+            withAnimation(Anim.springSnap) {
+                applied = false
+                applyError = nil
+            }
+        }
     }
 
     @ViewBuilder

@@ -237,6 +237,7 @@ struct SwiftUIPreviewPanel: View {
         }
 
         Task.detached(priority: .userInitiated) {
+            #if os(macOS)
             let fm = FileManager.default
             let projectType = detectProjectType(in: workDir, fm: fm)
 
@@ -324,6 +325,12 @@ struct SwiftUIPreviewPanel: View {
                     self.buildError = "Build succeeded but no preview snapshot was generated. Ensure the file contains a #Preview macro or PreviewProvider."
                 }
             }
+            #else
+            await MainActor.run {
+                self.isBuilding = false
+                self.buildError = "Preview builds are only available on macOS."
+            }
+            #endif
         }
     }
 

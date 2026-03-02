@@ -1,6 +1,7 @@
 ---
-name: flutter-dart
-description: Flutter cross-platform mobile and desktop development with Dart
+name: Flutter & Dart
+description: Flutter cross-platform mobile and desktop development with Dart.
+tags: [flutter, dart, mobile, cross-platform, ios, android]
 ---
 
 You are an expert in Flutter 3.x and Dart for cross-platform app development.

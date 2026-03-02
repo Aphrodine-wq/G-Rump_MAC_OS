@@ -209,7 +209,9 @@ struct LayoutCustomizerView: View {
                 .frame(width: 24)
 
             Toggle(title, isOn: isOn)
+                #if os(macOS)
                 .toggleStyle(.checkbox)
+                #endif
                 .font(Typography.bodySmall)
                 .foregroundColor(themeManager.palette.textPrimary)
 
@@ -336,7 +338,9 @@ struct LayoutCustomizerView: View {
                 .frame(width: 24)
 
             Toggle(title, isOn: isOn)
+                #if os(macOS)
                 .toggleStyle(.checkbox)
+                #endif
                 .font(Typography.bodySmall)
                 .foregroundColor(themeManager.palette.textPrimary)
 

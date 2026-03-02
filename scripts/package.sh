@@ -2,13 +2,19 @@
 set -euo pipefail
 
 # G-Rump 2.0 macOS Packaging Script
-# Creates a signed .app bundle and optionally a .dmg with notarization.
+# Creates a properly signed .app bundle and optionally a .dmg with notarization.
+#
+# IMPORTANT: All builds are at minimum ad-hoc codesigned to prevent macOS
+# app translocation, which moves unsigned .app bundles to a randomized
+# read-only path and breaks resource loading at runtime.
 #
 # Usage:
-#   ./scripts/package.sh                          # Build .app only (no signing)
-#   ./scripts/package.sh --sign                    # Build + code sign
+#   ./scripts/package.sh                          # Build .app (ad-hoc signed)
+#   ./scripts/package.sh --sign                    # Build + Developer ID sign
 #   ./scripts/package.sh --sign --dmg              # Build + sign + create .dmg
 #   ./scripts/package.sh --sign --dmg --notarize   # Build + sign + .dmg + notarize
+#   ./scripts/package.sh --clean                   # Force clean rebuild
+#   ./scripts/package.sh --skip-build              # Re-package from existing binary
 #
 # Prerequisites:
 #   brew install create-dmg    (required for --dmg)
@@ -21,38 +27,74 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BUILD_DIR="$PROJECT_DIR/.build/release"
 APP_NAME="G-Rump"
-APP_BUNDLE="$PROJECT_DIR/dist/${APP_NAME}.app"
-DMG_PATH="$PROJECT_DIR/dist/${APP_NAME}.dmg"
+DIST_DIR="$PROJECT_DIR/dist"
+APP_BUNDLE="$DIST_DIR/${APP_NAME}.app"
+DMG_PATH="$DIST_DIR/${APP_NAME}.dmg"
 ENTITLEMENTS="$PROJECT_DIR/GRump.entitlements"
 INFO_PLIST="$PROJECT_DIR/Sources/GRump/Info.plist"
+ICON_SOURCE="$PROJECT_DIR/Sources/GRump/Resources/AppIcon.icns"
+ASSETS_DIR="$PROJECT_DIR/Sources/GRump/Resources/Assets.xcassets/AppIcon.appiconset"
 
 DO_SIGN=false
 DO_DMG=false
 DO_NOTARIZE=false
+DO_CLEAN=false
+SKIP_BUILD=false
 
 for arg in "$@"; do
     case "$arg" in
         --sign) DO_SIGN=true ;;
         --dmg) DO_DMG=true ;;
         --notarize) DO_NOTARIZE=true ;;
+        --clean) DO_CLEAN=true ;;
+        --skip-build) SKIP_BUILD=true ;;
         --help|-h)
-            echo "Usage: $0 [--sign] [--dmg] [--notarize]"
+            echo "Usage: $0 [--sign] [--dmg] [--notarize] [--clean] [--skip-build]"
             echo ""
             echo "  --sign       Code sign with Developer ID (requires DEVELOPER_ID env var)"
-            echo "  --dmg        Create .dmg disk image"
+            echo "  --dmg        Create .dmg disk image (requires create-dmg)"
             echo "  --notarize   Submit to Apple for notarization (requires APPLE_ID, TEAM_ID, APP_PASSWORD)"
+            echo "  --clean      Force clean rebuild (removes .build and dist)"
+            echo "  --skip-build Re-package from existing binary (skip swift build)"
             exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Run $0 --help for usage."
+            exit 1
             ;;
     esac
 done
 
-# ── Pre-flight: check create-dmg if needed ────────
+# ── Pre-flight checks ─────────────────────────────────
 if $DO_DMG; then
     if ! command -v create-dmg &>/dev/null; then
         echo "✗ create-dmg is required for DMG creation."
         echo "  Install it with: brew install create-dmg"
+        exit 1
+    fi
+fi
+
+if $DO_NOTARIZE && ! $DO_SIGN; then
+    echo "✗ Notarization requires signing. Add --sign flag."
+    exit 1
+fi
+
+if $DO_SIGN && [ -z "${DEVELOPER_ID:-}" ]; then
+    echo "✗ DEVELOPER_ID not set. Example:"
+    echo '  export DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"'
+    exit 1
+fi
+
+if $DO_NOTARIZE; then
+    if [ -z "${APPLE_ID:-}" ] || [ -z "${TEAM_ID:-}" ] || [ -z "${APP_PASSWORD:-}" ]; then
+        echo "✗ Notarization requires these environment variables:"
+        echo "  APPLE_ID     — your Apple ID email"
+        echo "  TEAM_ID      — your Apple Developer Team ID"
+        echo "  APP_PASSWORD — app-specific password"
+        echo ""
+        echo "  Tip: create .env.local and run: source .env.local"
         exit 1
     fi
 fi
@@ -62,45 +104,108 @@ echo "  G-Rump 2.0 Packaging"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ── Step 1: Build release binary ──────────────────────
-echo "▸ Building release binary..."
+JOBS="$(sysctl -n hw.ncpu)"
 cd "$PROJECT_DIR"
-swift build -c release -j "$(sysctl -n hw.ncpu)" 2>&1 | tail -5
-BINARY="$BUILD_DIR/GRump"
+
+# ── Step 1: Clean (if requested) ──────────────────────
+if $DO_CLEAN; then
+    echo "▸ Cleaning build artifacts..."
+    rm -rf .build dist
+    echo "✓ Cleaned .build/ and dist/"
+    echo ""
+fi
+
+# ── Step 2: Build universal release binary ────────────
+# Resolve the binary output path dynamically via --show-bin-path
+# so we don't hardcode a path that may differ across Swift versions.
+BUILD_FLAGS="-c release --arch arm64 --arch x86_64 -j $JOBS"
+
+if $SKIP_BUILD; then
+    echo "▸ Skipping build (--skip-build)..."
+    BIN_DIR=$(swift build $BUILD_FLAGS --show-bin-path 2>/dev/null)
+    BINARY="$BIN_DIR/GRump"
+    if [ ! -f "$BINARY" ]; then
+        echo "✗ No existing binary found at $BINARY"
+        echo "  Run without --skip-build first."
+        exit 1
+    fi
+    echo "  → Using existing binary: $BINARY"
+else
+    echo "▸ Building universal release binary (arm64 + x86_64)..."
+    START_TIME=$(date +%s)
+
+    if ! swift build $BUILD_FLAGS 2>&1 | tail -20; then
+        echo ""
+        echo "✗ Build failed. Check the errors above."
+        echo "  Try: ./scripts/package.sh --clean"
+        exit 1
+    fi
+
+    BIN_DIR=$(swift build $BUILD_FLAGS --show-bin-path 2>/dev/null)
+    BINARY="$BIN_DIR/GRump"
+
+    END_TIME=$(date +%s)
+    BUILD_TIME=$((END_TIME - START_TIME))
+    echo "  → Build completed in ${BUILD_TIME}s"
+fi
 
 if [ ! -f "$BINARY" ]; then
-    echo "✗ Build failed — binary not found at $BINARY"
+    echo "✗ Binary not found at $BINARY"
     exit 1
 fi
-echo "✓ Binary built: $BINARY"
+
+# Verify universal binary
+ARCHS=$(lipo -archs "$BINARY" 2>/dev/null || echo "unknown")
+echo "✓ Binary: $BINARY"
+echo "  → Architectures: $ARCHS"
+if [[ "$ARCHS" != *"arm64"* ]] || [[ "$ARCHS" != *"x86_64"* ]]; then
+    echo "⚠ Warning: Binary may not be universal. Expected arm64 + x86_64, got: $ARCHS"
+fi
 echo ""
 
-# ── Step 2: Create .app bundle ────────────────────────
+# ── Step 3: Assemble .app bundle ──────────────────────
 echo "▸ Creating .app bundle..."
+
+# Always start fresh to avoid stale artifacts
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Copy binary
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/GRump"
+chmod +x "$APP_BUNDLE/Contents/MacOS/GRump"
 
 # Copy Info.plist
+if [ ! -f "$INFO_PLIST" ]; then
+    echo "✗ Info.plist not found at $INFO_PLIST"
+    exit 1
+fi
 cp "$INFO_PLIST" "$APP_BUNDLE/Contents/Info.plist"
+echo "  → Info.plist"
 
-# Copy bundled resources (skills, etc.) if they exist
-RESOURCES_DIR="$BUILD_DIR/GRump_GRump.bundle"
-if [ -d "$RESOURCES_DIR" ]; then
-    cp -R "$RESOURCES_DIR" "$APP_BUNDLE/Contents/Resources/"
-    echo "  → Copied resource bundle"
+# Write PkgInfo
+echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
+
+# Copy bundled resources (skills, privacy manifest, etc.)
+RESOURCE_BUNDLE="$BIN_DIR/GRump_GRump.bundle"
+if [ -d "$RESOURCE_BUNDLE" ]; then
+    cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
+    SKILL_COUNT=$(find "$APP_BUNDLE/Contents/Resources/GRump_GRump.bundle" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    echo "  → Resource bundle ($SKILL_COUNT skills)"
+else
+    echo "⚠ Warning: SPM resource bundle not found at $RESOURCE_BUNDLE"
+    echo "  Skills and bundled resources will be missing."
 fi
 
 # Copy or generate app icon
-ICON_PATH="$PROJECT_DIR/Sources/GRump/Resources/AppIcon.icns"
-if [ ! -f "$ICON_PATH" ]; then
+if [ -f "$ICON_SOURCE" ]; then
+    cp "$ICON_SOURCE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+    echo "  → AppIcon.icns (existing)"
+elif [ -d "$ASSETS_DIR" ]; then
     echo "  → Generating AppIcon.icns from xcassets PNGs..."
-    ICONSET_DIR=$(mktemp -d)/AppIcon.iconset
+    ICONSET_TMP=$(mktemp -d)
+    ICONSET_DIR="$ICONSET_TMP/AppIcon.iconset"
     mkdir -p "$ICONSET_DIR"
-    ASSETS_DIR="$PROJECT_DIR/Sources/GRump/Resources/Assets.xcassets/AppIcon.appiconset"
     cp "$ASSETS_DIR/16.png"   "$ICONSET_DIR/icon_16x16.png"
     cp "$ASSETS_DIR/32.png"   "$ICONSET_DIR/icon_16x16@2x.png"
     cp "$ASSETS_DIR/32.png"   "$ICONSET_DIR/icon_32x32.png"
@@ -111,38 +216,48 @@ if [ ! -f "$ICON_PATH" ]; then
     cp "$ASSETS_DIR/512.png"  "$ICONSET_DIR/icon_256x256@2x.png"
     cp "$ASSETS_DIR/512.png"  "$ICONSET_DIR/icon_512x512.png"
     cp "$ASSETS_DIR/1024.png" "$ICONSET_DIR/icon_512x512@2x.png"
-    iconutil -c icns "$ICONSET_DIR" -o "$ICON_PATH"
-    rm -rf "$(dirname "$ICONSET_DIR")"
-    echo "  → Generated AppIcon.icns"
+    iconutil -c icns "$ICONSET_DIR" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+    rm -rf "$ICONSET_TMP"
+    echo "  → AppIcon.icns (generated)"
+else
+    echo "⚠ Warning: No app icon found. App will use default icon."
 fi
-cp "$ICON_PATH" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-echo "  → Copied app icon"
 
-# Write PkgInfo
-echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
-
-echo "✓ App bundle created: $APP_BUNDLE"
+echo "✓ App bundle assembled: $APP_BUNDLE"
 echo ""
 
-# ── Step 3: Code sign ─────────────────────────────────
+# ── Step 4: Code sign ─────────────────────────────────
+# CRITICAL: Always sign. Without at least an ad-hoc signature, macOS
+# applies app translocation — moving the .app to a randomized read-only
+# path at launch. This breaks Bundle.main.resourceURL and causes the app
+# to get stuck on the splash screen (resources like skills, conversations
+# data, etc. become inaccessible).
 if $DO_SIGN; then
-    if [ -z "${DEVELOPER_ID:-}" ]; then
-        echo "✗ DEVELOPER_ID not set. Example:"
-        echo '  export DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"'
-        exit 1
-    fi
-    echo "▸ Code signing with: $DEVELOPER_ID"
+    echo "▸ Code signing with Developer ID: $DEVELOPER_ID"
     codesign --force --deep --options runtime \
         --entitlements "$ENTITLEMENTS" \
         --sign "$DEVELOPER_ID" \
         "$APP_BUNDLE"
-    echo "▸ Verifying signature..."
-    codesign --verify --verbose=2 "$APP_BUNDLE"
-    echo "✓ Code signed and verified"
-    echo ""
+else
+    echo "▸ Ad-hoc code signing (prevents app translocation)..."
+    codesign --force --deep \
+        --entitlements "$ENTITLEMENTS" \
+        --sign - \
+        "$APP_BUNDLE"
 fi
 
-# ── Step 4: Create .dmg ──────────────────────────────
+# Verify signature
+echo "▸ Verifying signature..."
+if codesign --verify --verbose=2 "$APP_BUNDLE" 2>&1; then
+    echo "✓ Code signature verified"
+else
+    echo "✗ Code signature verification failed"
+    echo "  The app may not launch correctly from Finder."
+    exit 1
+fi
+echo ""
+
+# ── Step 5: Create .dmg ──────────────────────────────
 if $DO_DMG; then
     echo "▸ Creating .dmg..."
     rm -f "$DMG_PATH"
@@ -176,30 +291,46 @@ if $DO_DMG; then
     echo ""
 fi
 
-# ── Step 5: Notarize ─────────────────────────────────
+# ── Step 6: Notarize ─────────────────────────────────
 if $DO_NOTARIZE; then
-    if [ -z "${APPLE_ID:-}" ] || [ -z "${TEAM_ID:-}" ] || [ -z "${APP_PASSWORD:-}" ]; then
-        echo "✗ Notarization requires these environment variables:"
-        echo "  APPLE_ID     — your Apple ID email"
-        echo "  TEAM_ID      — your Apple Developer Team ID"
-        echo "  APP_PASSWORD — app-specific password"
-        exit 1
-    fi
-
     NOTARIZE_TARGET="$DMG_PATH"
     if [ ! -f "$NOTARIZE_TARGET" ]; then
         # If no DMG, zip the .app for notarization
-        NOTARIZE_TARGET="$PROJECT_DIR/dist/${APP_NAME}.zip"
+        NOTARIZE_TARGET="$DIST_DIR/${APP_NAME}.zip"
         echo "▸ Creating zip for notarization..."
         ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARIZE_TARGET"
     fi
 
-    echo "▸ Submitting for notarization..."
-    xcrun notarytool submit "$NOTARIZE_TARGET" \
+    echo "▸ Submitting for notarization (this may take several minutes)..."
+    SUBMIT_OUTPUT=$(xcrun notarytool submit "$NOTARIZE_TARGET" \
         --apple-id "$APPLE_ID" \
         --team-id "$TEAM_ID" \
         --password "$APP_PASSWORD" \
-        --wait
+        --wait 2>&1) || true
+
+    echo "$SUBMIT_OUTPUT"
+
+    # Extract submission ID for log retrieval
+    SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep -o 'id: [a-f0-9-]*' | head -1 | sed 's/id: //')
+
+    if echo "$SUBMIT_OUTPUT" | grep -qi "accepted\|success"; then
+        echo "✓ Notarization accepted"
+    else
+        echo "✗ Notarization may have failed"
+        if [ -n "$SUBMISSION_ID" ]; then
+            echo "▸ Fetching notarization log..."
+            xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --team-id "$TEAM_ID" \
+                --password "$APP_PASSWORD" \
+                "$DIST_DIR/notarization-log.json" 2>/dev/null || true
+            if [ -f "$DIST_DIR/notarization-log.json" ]; then
+                echo "  → Log saved to dist/notarization-log.json"
+                cat "$DIST_DIR/notarization-log.json"
+            fi
+        fi
+        exit 1
+    fi
 
     echo "▸ Stapling notarization ticket..."
     if [ -f "$DMG_PATH" ]; then
@@ -207,19 +338,27 @@ if $DO_NOTARIZE; then
     fi
     xcrun stapler staple "$APP_BUNDLE"
 
-    echo "✓ Notarization complete"
+    # Verify notarization
+    echo "▸ Verifying notarization..."
+    spctl --assess --type execute --verbose=2 "$APP_BUNDLE" 2>&1 || true
+
+    echo "✓ Notarization complete — app is ready for distribution"
     echo ""
 fi
 
 # ── Summary ───────────────────────────────────────────
+APP_SIZE=$(du -sh "$APP_BUNDLE" | cut -f1)
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Done!"
 echo ""
-echo "  .app → $APP_BUNDLE"
+echo "  .app → $APP_BUNDLE ($APP_SIZE)"
 if $DO_DMG && [ -f "$DMG_PATH" ]; then
     DMG_SIZE=$(du -h "$DMG_PATH" | cut -f1)
     echo "  .dmg → $DMG_PATH ($DMG_SIZE)"
 fi
+SIGN_TYPE="ad-hoc"
+if $DO_SIGN; then SIGN_TYPE="Developer ID"; fi
+echo "  sign → $SIGN_TYPE"
 echo ""
 echo "  To test: open \"$APP_BUNDLE\""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

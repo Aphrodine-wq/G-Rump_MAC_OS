@@ -366,20 +366,58 @@ extension SettingsView {
     // MARK: - Notifications
 
     var notificationsSection: some View {
-        settingsCard {
-            VStack(alignment: .leading, spacing: Spacing.xxl) {
-                sectionTitle("System Notifications", icon: "bell.badge.fill", accent: themeManager.accentColor)
-                Text("When the agent uses the system_notify tool, notifications can appear in Notification Center.")
-                    .font(Typography.bodySmall)
-                    .foregroundColor(.textMuted)
-                Toggle("Allow system notifications", isOn: $allowSystemNotifications)
-                Toggle("Sound for notifications", isOn: $notificationSoundEnabled)
-                #if os(iOS)
-                Toggle("Haptic feedback", isOn: $hapticFeedbackEnabled)
-                #endif
-                #if os(macOS)
-                Toggle("Show menu bar extra", isOn: $showMenuBarExtra)
-                #endif
+        VStack(alignment: .leading, spacing: Spacing.huge) {
+            settingsCard {
+                VStack(alignment: .leading, spacing: Spacing.xxl) {
+                    sectionTitle("System Notifications", icon: "bell.badge.fill", accent: themeManager.accentColor)
+                    Text("When the agent uses the system_notify tool, notifications can appear in Notification Center.")
+                        .font(Typography.bodySmall)
+                        .foregroundColor(.textMuted)
+                    Toggle("Allow system notifications", isOn: $allowSystemNotifications)
+                    Toggle("Sound for notifications", isOn: $notificationSoundEnabled)
+                    #if os(iOS)
+                    Toggle("Haptic feedback", isOn: $hapticFeedbackEnabled)
+                    #endif
+                    #if os(macOS)
+                    Toggle("Show menu bar extra", isOn: $showMenuBarExtra)
+                    #endif
+                }
+            }
+            settingsCard {
+                VStack(alignment: .leading, spacing: Spacing.xxl) {
+                    sectionTitle("Focus Filters", icon: "moon.fill", accent: themeManager.accentColor)
+                    Text("Integrates with macOS Focus modes. When a Focus is active, G-Rump can suppress notifications and adjust behavior automatically.")
+                        .font(Typography.bodySmall)
+                        .foregroundColor(.textMuted)
+                    HStack(spacing: Spacing.xl) {
+                        Image(systemName: FocusFilterService.shared.isFocusModeActive ? "moon.fill" : "moon")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(FocusFilterService.shared.isFocusModeActive ? themeManager.palette.effectiveAccent : .textMuted)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(FocusFilterService.shared.isFocusModeActive ? "Focus Active" : "No Focus Active")
+                                .font(Typography.bodySmallSemibold)
+                                .foregroundColor(.textPrimary)
+                            Text(FocusFilterService.shared.isFocusModeActive
+                                 ? "Notifications are suppressed per your Focus settings."
+                                 : "G-Rump will send notifications normally.")
+                                .font(Typography.captionSmall)
+                                .foregroundColor(.textMuted)
+                        }
+                        Spacer()
+                        if FocusFilterService.shared.isFocusModeActive {
+                            Text("Active")
+                                .font(Typography.micro)
+                                .foregroundColor(themeManager.palette.effectiveAccent)
+                                .padding(.horizontal, Spacing.lg)
+                                .padding(.vertical, 3)
+                                .background(themeManager.palette.effectiveAccent.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(Spacing.lg)
+                    .background(themeManager.palette.bgInput.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                }
             }
         }
     }
@@ -446,11 +484,10 @@ extension SettingsView {
 
     func openUpdatesURL() {
         #if os(macOS)
-        if let url = URL(string: "https://grump.app/releases") {
-            NSWorkspace.shared.open(url)
-        }
+        // Post notification to trigger Sparkle check from GRumpApp where the service lives
+        NotificationCenter.default.post(name: .init("GRumpCheckForUpdates"), object: nil)
         #else
-        if let url = URL(string: "https://grump.app/releases") {
+        if let url = URL(string: "https://www.g-rump.com/releases") {
             UIApplication.shared.open(url)
         }
         #endif
@@ -461,11 +498,25 @@ extension SettingsView {
     var toolsSection: some View {
         settingsCard {
             HStack(spacing: 0) {
+                Group {
+                #if os(macOS)
                 List(selection: $selectedToolCategory) {
                     ForEach(ToolDefinitions.ToolCategory.allCases) { cat in
                         Label(cat.rawValue, systemImage: toolCategoryIcon(cat))
                             .tag(cat)
                     }
+                }
+                #else
+                List {
+                    ForEach(ToolDefinitions.ToolCategory.allCases) { cat in
+                        Button {
+                            selectedToolCategory = cat
+                        } label: {
+                            Label(cat.rawValue, systemImage: toolCategoryIcon(cat))
+                        }
+                    }
+                }
+                #endif
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
@@ -568,11 +619,14 @@ extension SettingsView {
     var mcpSection: some View {
         settingsCard {
             VStack(alignment: .leading, spacing: Spacing.xl) {
-                sectionTitle("MCP Servers", icon: "cylinder.split.1x2.fill", accent: themeManager.accentColor)
-                Text("Add external Model Context Protocol servers to give the agent access to their tools. Tools are prefixed with mcp_<serverId>_")
-                    .font(Typography.captionSmall)
-                    .foregroundColor(.textMuted)
-                Text("Some servers require your own credentials (for example GitHub token, Brave API key, Slack token, database URLs). Add those in your shell environment before testing.")
+                HStack {
+                    sectionTitle("MCP Servers", icon: "cylinder.split.1x2.fill", accent: themeManager.accentColor)
+                    Spacer()
+                    Text("\(mcpServers.filter(\.enabled).count) active")
+                        .font(Typography.micro)
+                        .foregroundColor(.textMuted)
+                }
+                Text("Add external Model Context Protocol servers to give the agent access to their tools, resources, and prompts. Connections are persistent and reused across tool calls.")
                     .font(Typography.captionSmall)
                     .foregroundColor(.textMuted)
                 if mcpServers.isEmpty {
@@ -600,9 +654,20 @@ extension SettingsView {
                                     Text(server.name)
                                         .font(Typography.bodySmallSemibold)
                                         .foregroundColor(.textPrimary)
-                                    Text(server.id)
-                                        .font(Typography.codeSmall)
-                                        .foregroundColor(.textMuted)
+                                    HStack(spacing: Spacing.sm) {
+                                        Text(server.id)
+                                            .font(Typography.codeSmall)
+                                            .foregroundColor(.textMuted)
+                                        Text("·")
+                                            .foregroundColor(.textMuted)
+                                        Text(server.transport.displayName)
+                                            .font(Typography.micro)
+                                            .foregroundColor(.textMuted)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 1)
+                                            .background(themeManager.palette.bgInput.opacity(0.5))
+                                            .clipShape(Capsule())
+                                    }
                                 }
                                 Spacer()
                                 Button {
@@ -637,10 +702,15 @@ extension SettingsView {
                             }
 
                             if let status = mcpServerTestMessages[server.id] {
-                                Text(status)
-                                    .font(Typography.micro)
-                                    .foregroundColor(status.hasPrefix("OK:") ? .accentGreen : .textMuted)
-                                    .padding(.leading, Spacing.colossal)
+                                HStack(spacing: Spacing.sm) {
+                                    Image(systemName: status.hasPrefix("OK:") ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(status.hasPrefix("OK:") ? .accentGreen : .orange)
+                                    Text(status)
+                                        .font(Typography.micro)
+                                        .foregroundColor(status.hasPrefix("OK:") ? .accentGreen : .textMuted)
+                                }
+                                .padding(.leading, Spacing.colossal)
                             }
                         }
                         .padding(Spacing.lg)
@@ -995,6 +1065,30 @@ extension SettingsView {
             }
             settingsCard {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
+                    sectionTitle("Biometric Lock", icon: "faceid", accent: themeManager.accentColor)
+                    Text("Require Touch ID or Apple Watch to unlock G-Rump. API keys are stored in the Secure Enclave.")
+                        .font(Typography.bodySmall)
+                        .foregroundColor(.textMuted)
+                    HStack(spacing: Spacing.xl) {
+                        Image(systemName: SecureEnclaveService.shared.isAvailable ? "checkmark.shield.fill" : "xmark.shield.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(SecureEnclaveService.shared.isAvailable ? .accentGreen : .textMuted)
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text(SecureEnclaveService.shared.isAvailable ? "Secure Enclave Available" : "Secure Enclave Unavailable")
+                                .font(Typography.bodySmallSemibold)
+                                .foregroundColor(.textPrimary)
+                            Text("Biometric: \(SecureEnclaveService.shared.biometricTypeDescription)")
+                                .font(Typography.captionSmall)
+                                .foregroundColor(.textMuted)
+                        }
+                    }
+                    .padding(Spacing.lg)
+                    .background(themeManager.palette.bgInput.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                }
+            }
+            settingsCard {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
                     sectionTitle("Permissions", icon: "hand.raised.fill", accent: themeManager.accentColor)
                     Text("Grant these in System Settings as needed: Notifications (system_notify), Screen Recording (screen_snapshot), Camera (camera_snap), Accessibility (window_snapshot).")
                         .font(Typography.bodySmall)
@@ -1039,7 +1133,7 @@ extension SettingsView {
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                         .font(Typography.codeSmall)
                         .foregroundColor(.textMuted)
-                    if let url = URL(string: "https://grump.app") {
+                    if let url = URL(string: "https://www.g-rump.com") {
                         Link(destination: url) {
                             HStack(spacing: Spacing.sm) {
                                 Image(systemName: "arrow.up.right.square")
@@ -1126,10 +1220,65 @@ extension SettingsView {
                     .tint(themeManager.palette.effectiveAccent)
                 }
             }
+            settingsCard {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    sectionTitle("ClawHub", icon: "square.grid.2x2.fill", accent: themeManager.accentColor)
+                    Text("Browse and install shared skills from the ClawHub registry. Skills are stored in ~/.grump/skills/ and shared with OpenClaw.")
+                        .font(Typography.captionSmall)
+                        .foregroundColor(.textMuted)
+
+                    let hubSkills = ClawHubService.shared.installedSkills
+                    if hubSkills.isEmpty {
+                        HStack(spacing: Spacing.lg) {
+                            Image(systemName: "tray")
+                                .font(.system(size: 20))
+                                .foregroundColor(.textMuted)
+                            Text("No hub skills installed yet.")
+                                .font(Typography.bodySmall)
+                                .foregroundColor(.textMuted)
+                        }
+                        .padding(.vertical, Spacing.md)
+                    } else {
+                        ForEach(hubSkills, id: \.name) { skill in
+                            HStack(spacing: Spacing.lg) {
+                                Image(systemName: "doc.text.fill")
+                                    .font(Typography.captionSmall)
+                                    .foregroundColor(themeManager.palette.effectiveAccent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(skill.name)
+                                        .font(Typography.bodySmallSemibold)
+                                        .foregroundColor(.textPrimary)
+                                    if !skill.description.isEmpty {
+                                        Text(skill.description)
+                                            .font(Typography.captionSmall)
+                                            .foregroundColor(.textMuted)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                Text("Installed")
+                                    .font(Typography.micro)
+                                    .foregroundColor(.accentGreen)
+                            }
+                            .padding(Spacing.md)
+                            .background(themeManager.palette.bgInput.opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        }
+                    }
+
+                    Button(action: { ClawHubService.shared.loadInstalledSkills() }) {
+                        Label("Refresh Hub Skills", systemImage: "arrow.clockwise")
+                            .font(Typography.bodySmallMedium)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(themeManager.palette.effectiveAccent)
+                }
+            }
         }
         .onAppear {
             settingsSkills = SkillsStorage.loadSkills(workingDirectory: workingDirectory)
             settingsSkillEnabledIds = SkillsSettingsStorage.loadAllowlist()
+            ClawHubService.shared.loadInstalledSkills()
         }
         .sheet(isPresented: $settingsShowAddSkillSheet) {
             AddSkillSheet(

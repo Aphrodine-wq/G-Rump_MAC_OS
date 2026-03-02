@@ -7,7 +7,7 @@ extension ToolDefinitions {
 
     // MARK: - Shell & Environment
 
-    static let getEnv: [String: Any] = [
+    nonisolated(unsafe) static let getEnv: [String: Any] = [
         "type": "function",
         "function": [
             "name": "get_env",
@@ -22,7 +22,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let getCwd: [String: Any] = [
+    nonisolated(unsafe) static let getCwd: [String: Any] = [
         "type": "function",
         "function": [
             "name": "get_cwd",
@@ -31,7 +31,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let listEnv: [String: Any] = [
+    nonisolated(unsafe) static let listEnv: [String: Any] = [
         "type": "function",
         "function": [
             "name": "list_env",
@@ -46,7 +46,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let listProcesses: [String: Any] = [
+    nonisolated(unsafe) static let listProcesses: [String: Any] = [
         "type": "function",
         "function": [
             "name": "list_processes",
@@ -62,7 +62,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let diskUsage: [String: Any] = [
+    nonisolated(unsafe) static let diskUsage: [String: Any] = [
         "type": "function",
         "function": [
             "name": "disk_usage",
@@ -77,7 +77,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let runCommand: [String: Any] = [
+    nonisolated(unsafe) static let runCommand: [String: Any] = [
         "type": "function",
         "function": [
             "name": "run_command",
@@ -103,7 +103,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let runBackground: [String: Any] = [
+    nonisolated(unsafe) static let runBackground: [String: Any] = [
         "type": "function",
         "function": [
             "name": "run_background",
@@ -119,7 +119,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let killProcess: [String: Any] = [
+    nonisolated(unsafe) static let killProcess: [String: Any] = [
         "type": "function",
         "function": [
             "name": "kill_process",
@@ -135,7 +135,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let which: [String: Any] = [
+    nonisolated(unsafe) static let which: [String: Any] = [
         "type": "function",
         "function": [
             "name": "which",
@@ -152,7 +152,7 @@ extension ToolDefinitions {
 
     // MARK: - System (macOS)
 
-    static let systemRun: [String: Any] = [
+    nonisolated(unsafe) static let systemRun: [String: Any] = [
         "type": "function",
         "function": [
             "name": "system_run",
@@ -178,7 +178,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let systemNotify: [String: Any] = [
+    nonisolated(unsafe) static let systemNotify: [String: Any] = [
         "type": "function",
         "function": [
             "name": "system_notify",
@@ -206,7 +206,7 @@ extension ToolDefinitions {
 
     // MARK: - Clipboard & Open (macOS)
 
-    static let clipboardRead: [String: Any] = [
+    nonisolated(unsafe) static let clipboardRead: [String: Any] = [
         "type": "function",
         "function": [
             "name": "clipboard_read",
@@ -219,7 +219,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let clipboardWrite: [String: Any] = [
+    nonisolated(unsafe) static let clipboardWrite: [String: Any] = [
         "type": "function",
         "function": [
             "name": "clipboard_write",
@@ -237,7 +237,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let openURL: [String: Any] = [
+    nonisolated(unsafe) static let openURL: [String: Any] = [
         "type": "function",
         "function": [
             "name": "open_url",
@@ -255,7 +255,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let openApp: [String: Any] = [
+    nonisolated(unsafe) static let openApp: [String: Any] = [
         "type": "function",
         "function": [
             "name": "open_app",
@@ -275,7 +275,7 @@ extension ToolDefinitions {
 
     // MARK: - Screen & Camera (macOS)
 
-    static let screenSnapshot: [String: Any] = [
+    nonisolated(unsafe) static let screenSnapshot: [String: Any] = [
         "type": "function",
         "function": [
             "name": "screen_snapshot",
@@ -288,7 +288,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let screenRecord: [String: Any] = [
+    nonisolated(unsafe) static let screenRecord: [String: Any] = [
         "type": "function",
         "function": [
             "name": "screen_record",
@@ -306,7 +306,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let cameraSnap: [String: Any] = [
+    nonisolated(unsafe) static let cameraSnap: [String: Any] = [
         "type": "function",
         "function": [
             "name": "camera_snap",
@@ -319,7 +319,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let windowList: [String: Any] = [
+    nonisolated(unsafe) static let windowList: [String: Any] = [
         "type": "function",
         "function": [
             "name": "window_list",
@@ -332,7 +332,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let windowSnapshot: [String: Any] = [
+    nonisolated(unsafe) static let windowSnapshot: [String: Any] = [
         "type": "function",
         "function": [
             "name": "window_snapshot",
@@ -352,7 +352,7 @@ extension ToolDefinitions {
 
     // MARK: - System Info & Network
 
-    static let getSystemInfo: [String: Any] = [
+    nonisolated(unsafe) static let getSystemInfo: [String: Any] = [
         "type": "function",
         "function": [
             "name": "get_system_info",
@@ -365,7 +365,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let listNetworkInterfaces: [String: Any] = [
+    nonisolated(unsafe) static let listNetworkInterfaces: [String: Any] = [
         "type": "function",
         "function": [
             "name": "list_network_interfaces",

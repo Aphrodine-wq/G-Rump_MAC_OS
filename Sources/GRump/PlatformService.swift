@@ -20,7 +20,7 @@ enum PlatformService {
     private static let tokenKeychainAccount = "PlatformAuthToken"
 
     /// Canonical platform API URL. Users do not configure this; the app always uses this endpoint.
-    private static let defaultBaseURL = "https://api.grump.app"
+    private static let defaultBaseURL = "https://api.g-rump.com"
 
     static var baseURL: String { defaultBaseURL }
 
@@ -192,6 +192,7 @@ fileprivate extension PlatformService.MeResponse {
 
 private func tierCreditsPerMonth(_ tier: String) -> Int {
     switch tier {
+    case "starter": return 2000
     case "pro": return 5000
     case "team": return 25000
     default: return 500
@@ -201,6 +202,7 @@ private func tierCreditsPerMonth(_ tier: String) -> Int {
 extension PlatformService {
     static func tierDisplayName(_ tier: String) -> String {
         switch tier {
+        case "starter": return "Starter"
         case "pro": return "Pro"
         case "team": return "Team"
         default: return "Free"

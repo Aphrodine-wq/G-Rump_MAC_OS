@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 #if os(macOS)
 import AppKit
 import UniformTypeIdentifiers
@@ -29,6 +30,7 @@ enum AgentMode: String, CaseIterable, Identifiable, Codable {
     case argue
     case spec
     case parallel
+    case speculative
 
     var id: String { rawValue }
 
@@ -40,6 +42,7 @@ enum AgentMode: String, CaseIterable, Identifiable, Codable {
         case .argue: return "Debate"
         case .spec: return "Spec"
         case .parallel: return "Parallel"
+        case .speculative: return "Explore"
         }
     }
 
@@ -51,6 +54,7 @@ enum AgentMode: String, CaseIterable, Identifiable, Codable {
         case .argue: return "bubble.left.and.bubble.right"
         case .spec: return "doc.text.magnifyingglass"
         case .parallel: return "arrow.triangle.branch"
+        case .speculative: return "point.3.connected.trianglepath.dotted"
         }
     }
 
@@ -62,9 +66,23 @@ enum AgentMode: String, CaseIterable, Identifiable, Codable {
         case .argue: return "Debates both sides before recommending an approach."
         case .spec: return "Asks clarifying questions to refine requirements before acting."
         case .parallel: return "Runs multiple sub-agents in parallel for complex tasks."
+        case .speculative: return "Explores 2-3 competing approaches in parallel and picks the winner."
         }
     }
     
+    /// Per-mode accent color for minimal visual differentiation.
+    var modeAccentColor: Color {
+        switch self {
+        case .standard:    return .purple
+        case .plan:        return .blue
+        case .fullStack:   return .green
+        case .argue:       return .orange
+        case .spec:        return .teal
+        case .parallel:    return .indigo
+        case .speculative: return .yellow
+        }
+    }
+
     var toastMessage: String {
         switch self {
         case .standard: return "Switched to Chat mode"
@@ -73,6 +91,7 @@ enum AgentMode: String, CaseIterable, Identifiable, Codable {
         case .argue: return "Switched to Debate mode"
         case .spec: return "Switched to Spec mode"
         case .parallel: return "Switched to Parallel mode"
+        case .speculative: return "Switched to Explore mode"
         }
     }
 }
@@ -109,6 +128,41 @@ class ChatViewModel: ObservableObject {
     @Published var synthesisingContent: String = ""
 
     private let orchestrator = AgentOrchestrator()
+
+    /// Real-time streaming performance metrics (tokens/sec, elapsed, phase).
+    let streamMetrics = StreamMetrics()
+
+    /// Smart follow-up suggestions generated after each assistant response.
+    @Published var followUpSuggestions: [FollowUpSuggestion] = []
+
+    /// Multi-file context resolver for automatic file awareness.
+    let contextResolver = ContextResolver()
+
+    // MARK: - Next-Level Intelligence Subsystems
+
+    /// Detects when the agent is stuck in a repeating failure pattern and forces a strategy pivot.
+    let cognitiveLoopDetector = CognitiveLoopDetector()
+    /// Calibrated confidence scoring — adapts agent autonomy based on certainty.
+    let confidenceCalibration = ConfidenceCalibration()
+    /// Adversarial self-review — red team critic for Build mode output.
+    let adversarialReview = AdversarialReviewEngine()
+    /// Causal regression tracking — traces build/test failures to the commit that caused them.
+    let regressionTracker = CausalRegressionTracker()
+    /// Intent continuity — persists high-level goals across sessions with progress tracking.
+    let intentContinuity = IntentContinuityService()
+    /// Tracks code changes made during the current agent run for adversarial review.
+    var currentRunCodeChanges: [CodeChange] = []
+
+    // MARK: - Speculative Branching State
+    /// Active when agentMode == .speculative. Shows per-branch state.
+    @Published var speculativeBranches: [SpeculativeBranchState] = []
+    /// Index of the winning branch after evaluation.
+    @Published var speculativeWinnerIndex: Int? = nil
+
+    /// Preserved partial response content when a stream error occurs.
+    @Published var streamErrorPartialContent: String?
+    /// The error message from a failed stream, for inline retry UI.
+    @Published var streamErrorMessage: String?
 
     #if os(macOS)
     /// When non-nil, the UI should show an approval dialog for system_run. Call respondToSystemRunApproval when the user chooses.
@@ -159,12 +213,25 @@ class ChatViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(agentMode.rawValue, forKey: "AgentMode") }
     }
 
+    /// Selected model mode (Thinking, Fast, 1M, etc.) — nil for models without modes.
+    @Published var selectedModelMode: ModelMode? {
+        didSet {
+            if let mode = selectedModelMode {
+                UserDefaults.standard.set(mode.id, forKey: "SelectedModelMode")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "SelectedModelMode")
+            }
+        }
+    }
+
     // New multi-provider system
     @Published private var aiService = MultiProviderAIService()
     
     private let openRouterService = OpenRouterService()
     let activityStore = ActivityStore()
     internal var streamTask: Task<Void, Never>?
+    /// The OpenClaw session ID currently being processed, if any.
+    internal var activeOpenClawSessionId: String?
     private var cancellables = Set<AnyCancellable>()
     var syncDebounceTask: Task<Void, Never>?
     var syncDirty = false
@@ -271,7 +338,7 @@ class ChatViewModel: ObservableObject {
         // Show an empty conversation immediately so UI renders fast
         createNewConversation()
 
-        // Defer all disk I/O and network calls off the synchronous init path
+        // Load conversations on the next main-actor tick (fast, file I/O only)
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.loadConversations()
@@ -281,7 +348,13 @@ class ChatViewModel: ObservableObject {
                     self.userInput = self.loadDraft(forConversationId: id)
                 }
             }
-            if PlatformService.isLoggedIn {
+        }
+
+        // Network calls (Ollama, platform) run detached so they never
+        // block the main-actor cooperative queue during startup.
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            if await PlatformService.isLoggedIn {
                 await self.refreshPlatformUser()
             }
             await self.refreshLocalOllamaAvailability()
@@ -318,6 +391,21 @@ class ChatViewModel: ObservableObject {
         activityStore.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        // Subscribe to OpenClaw messages from the gateway
+        NotificationCenter.default.publisher(for: .openClawMessageReceived)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self,
+                      let userInfo = notification.userInfo,
+                      let sessionId = userInfo["sessionId"] as? String,
+                      let content = userInfo["content"] as? String else { return }
+                let model = userInfo["model"] as? String
+                Task { @MainActor in
+                    await self.handleOpenClawMessage(sessionId: sessionId, content: content, model: model)
+                }
+            }
             .store(in: &cancellables)
     }
 
@@ -462,12 +550,15 @@ class ChatViewModel: ObservableObject {
         let baseMax = min(1000, max(5, storedMax))
         let presetMax = appliedPresetMaxAgentSteps.map { min(1000, max(5, $0)) } ?? baseMax
         guard let cfg = projectConfig else {
-            var prompt = prependModeInstructions(to: prependSkillsContent(to: systemPrompt))
+            var prompt = prependModeInstructions(to: prependSkillsContent(to: prependSoulContent(to: systemPrompt)))
             if !workingDirectory.isEmpty {
                 prompt += "\n\nCurrent working directory: \(workingDirectory)"
             }
             appendSymbolGraphSummary(to: &prompt)
             appendProjectMemory(to: &prompt)
+            appendTemporalIntelligence(to: &prompt)
+            appendIntentContext(to: &prompt)
+            appendConfidenceWarning(to: &prompt)
             let allowlist = appliedPresetToolAllowlist ?? nil
             let userDenylist = ToolsSettingsStorage.loadDenylist()
             let tools = ToolDefinitions.toolsFiltered(allowlist: allowlist, userDenylist: userDenylist)
@@ -486,6 +577,9 @@ class ChatViewModel: ObservableObject {
         cfg.appendContext(to: &finalPrompt, baseDir: workingDirectory)
         appendSymbolGraphSummary(to: &finalPrompt)
         appendProjectMemory(to: &finalPrompt)
+        appendTemporalIntelligence(to: &finalPrompt)
+        appendIntentContext(to: &finalPrompt)
+        appendConfidenceWarning(to: &finalPrompt)
         let allowlist = appliedPresetToolAllowlist ?? toolAllowlist
         let userDenylist = ToolsSettingsStorage.loadDenylist()
         let tools = ToolDefinitions.toolsFiltered(allowlist: allowlist, userDenylist: userDenylist)
@@ -531,8 +625,16 @@ class ChatViewModel: ObservableObject {
             IMPORTANT — Your FIRST response must be SHORT (under 150 words). Acknowledge the task, then briefly outline how you plan to decompose it into parallel subtasks (e.g. "I'll split this into 3 parallel agents: one for X, one for Y, one for Z"). This gives the user immediate confidence that the system is working and shows the orchestration strategy.
             Then proceed to decompose, assign each subtask to the best-fit model, run them in parallel, and synthesize the results into a single coherent response.
             """
+        case .speculative:
+            instructions = """
+            MODE: Explore (Speculative Branching).
+            The system will automatically generate 2-3 competing solution approaches in parallel, \
+            evaluate each one, and present the winner. You are one branch of this exploration. \
+            Commit fully to your assigned approach — do not hedge or mention alternatives.
+            """
         }
-        return instructions + "\n\n" + basePrompt
+        let antiXML = "\nIMPORTANT: Do NOT output raw XML, function calls, or tool invocation markup (e.g. <execute>, <function>, <tool_call>) in your text response. Use the native tool_calls API mechanism instead. Any XML tool markup in your text will be stripped and may cause unexpected behavior."
+        return instructions + antiXML + "\n\n" + basePrompt
     }
 
     /// Prepends SOUL.md identity content as the foundation layer.
@@ -543,16 +645,44 @@ class ChatViewModel: ObservableObject {
     }
 
     /// Prepends enabled skill instructions to the base prompt.
+    /// Combines explicitly enabled skills + context-aware auto-suggested skills (score > 0.7).
     private func prependSkillsContent(to basePrompt: String) -> String {
         let skills = SkillsStorage.loadSkills(workingDirectory: workingDirectory)
         let enabledIds = SkillsSettingsStorage.loadAllowlist()
-        let enabled = skills.filter { enabledIds.contains($0.id) }
-        guard !enabled.isEmpty else { return basePrompt }
-        let skillBlocks = enabled.map { skill in
+        var activeSkills = skills.filter { enabledIds.contains($0.id) }
+
+        // Context-aware auto-injection: find relevant skills not already enabled
+        if let lastMessage = messages.last(where: { $0.role == .user })?.content {
+            let fileExtensions = detectFileExtensions()
+            let candidates = skills.filter { !enabledIds.contains($0.id) }
+            let suggested = candidates
+                .map { ($0, $0.relevanceScore(for: lastMessage, fileExtensions: fileExtensions)) }
+                .filter { $0.1 > 0.7 }
+                .sorted { $0.1 > $1.1 }
+                .prefix(3)
+                .map(\.0)
+            activeSkills.append(contentsOf: suggested)
+        }
+
+        guard !activeSkills.isEmpty else { return basePrompt }
+        let skillBlocks = activeSkills.map { skill in
             let header = "\n\n--- Skill: \(skill.name) ---\n"
             return header + skill.body
         }
         return skillBlocks.joined() + "\n\n--- End of skills ---\n\n" + basePrompt
+    }
+
+    /// Detect file extensions in the working directory for context-aware skill matching.
+    private func detectFileExtensions() -> Set<String> {
+        guard !workingDirectory.isEmpty else { return [] }
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(atPath: workingDirectory) else { return [] }
+        var extensions: Set<String> = []
+        for item in items.prefix(50) { // Sample up to 50 files
+            let ext = (item as NSString).pathExtension
+            if !ext.isEmpty { extensions.insert(".\(ext)") }
+        }
+        return extensions
     }
 
     // MARK: - Agent Loop (Multi-turn with parallel tool execution)
@@ -595,9 +725,11 @@ class ChatViewModel: ObservableObject {
 
             var finishReason = ""
             var lastStreamPublishTime = Date()
-            let streamThrottleInterval: TimeInterval = 0.025 // 40Hz for better responsiveness
-            let streamThrottleChars = 40 // Reduced for faster updates
             var lastPublishedLength = 0
+
+            // Start metrics tracking for this iteration
+            if iterationCount == 1 { streamMetrics.startStream() }
+            streamMetrics.setPhase(.waiting)
 
             do {
                 for try await event in stream {
@@ -605,15 +737,28 @@ class ChatViewModel: ObservableObject {
                     switch event {
                     case .text(let chunk):
                         textBuffer += chunk
+                        // Approximate token count (~4 chars per token)
+                        let approxTokens = max(1, chunk.count / 4)
+                        streamMetrics.recordTokens(approxTokens)
+
                         let now = Date()
                         let elapsed = now.timeIntervalSince(lastStreamPublishTime)
                         let charGrowth = textBuffer.count - lastPublishedLength
-                        let shouldPublish = elapsed >= streamThrottleInterval || charGrowth >= streamThrottleChars || chunk.contains("\n")
+                        // Adaptive throttle: tune interval based on model speed
+                        let adaptiveInterval = streamMetrics.recommendedUpdateInterval
+                        let adaptiveBatch = streamMetrics.recommendedBatchSize
+                        let shouldPublish = elapsed >= adaptiveInterval || charGrowth >= adaptiveBatch || chunk.contains("\n")
                         if shouldPublish {
                             lastStreamPublishTime = now
                             lastPublishedLength = textBuffer.count
-                            streamingContent = textBuffer
-                            FrameLoopService.shared.markStreaming(for: 0.5) // Use streaming mode
+                            // Strip any XML tool-call markup before displaying
+                            if XMLToolCallParser.containsXMLToolCalls(textBuffer) {
+                                let parsed = XMLToolCallParser.parse(textBuffer)
+                                streamingContent = parsed.strippedText
+                            } else {
+                                streamingContent = textBuffer
+                            }
+                            FrameLoopService.shared.markStreaming(for: 0.5)
                         }
 
                     case .toolCallDelta(let deltas):
@@ -630,12 +775,30 @@ class ChatViewModel: ObservableObject {
                         finishReason = reason
                     }
                 }
+                // Parse and strip XML tool calls from final buffer
+                if XMLToolCallParser.containsXMLToolCalls(textBuffer) {
+                    let parsed = XMLToolCallParser.parse(textBuffer)
+                    textBuffer = parsed.strippedText
+                    // Inject parsed XML tool calls into toolCallBuffers
+                    for xmlCall in parsed.toolCalls {
+                        let nextIdx = (toolCallBuffers.keys.max() ?? -1) + 1
+                        toolCallBuffers[nextIdx] = (
+                            id: "xml-\(UUID().uuidString.prefix(8))",
+                            name: xmlCall.name,
+                            args: xmlCall.argumentsJSON
+                        )
+                    }
+                    if finishReason == nil && !parsed.toolCalls.isEmpty {
+                        finishReason = "tool_calls"
+                    }
+                }
                 // Ensure final content is published (throttle may have skipped last chunk)
                 streamingContent = textBuffer
             } catch is CancellationError {
                 currentAgentStep = nil
                 currentAgentStepMax = nil
                 streamingContent = ""
+                streamMetrics.endStream()
                 return
             } catch {
                 if !textBuffer.isEmpty {
@@ -651,14 +814,21 @@ class ChatViewModel: ObservableObject {
 
                 currentAgentStep = nil
                 currentAgentStepMax = nil
-                errorMessage = friendlyErrorMessage(error)
+                let friendly = friendlyErrorMessage(error)
+                errorMessage = friendly
                 streamingContent = ""
+                streamMetrics.endStream(error: friendly)
+
+                // Preserve partial content + error for inline retry UI
+                streamErrorPartialContent = textBuffer.isEmpty ? nil : textBuffer
+                streamErrorMessage = friendly
+
                 // Notify user of task failure
                 if let conv = currentConversation {
                     GRumpNotificationService.shared.notifyTaskFailed(
                         conversationId: conv.id,
                         conversationTitle: conv.title,
-                        errorMessage: friendlyErrorMessage(error)
+                        errorMessage: friendly
                     )
                 }
                 return
@@ -695,6 +865,7 @@ class ChatViewModel: ObservableObject {
             }
 
             // Execute tool calls in parallel
+            streamMetrics.setPhase(.toolUse)
             let sortedCalls = toolCallBuffers.sorted(by: { $0.key < $1.key })
 
             // Update UI with active tool calls
@@ -751,6 +922,41 @@ class ChatViewModel: ObservableObject {
                     conversationId: currentConversation?.id,
                     metadata: metadata
                 ))
+
+                // --- Cognitive Loop Detector: record each tool action ---
+                if let pivot = await cognitiveLoopDetector.recordAction(
+                    toolName: call.name,
+                    arguments: call.args,
+                    result: result,
+                    wasError: !success
+                ) {
+                    // Inject pivot strategy as a system message to break the loop
+                    let pivotMsg = Message(role: .system, content: pivot.systemMessage)
+                    currentConversation?.messages.append(pivotMsg)
+                }
+
+                // --- Code Change Tracking: record file modifications for adversarial review ---
+                let writeTools: Set<String> = ["edit_file", "write_file", "create_file", "append_file"]
+                if writeTools.contains(call.name), success,
+                   let data = call.args.data(using: .utf8),
+                   let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let path = args["path"] as? String {
+                    let op: CodeChange.Operation = call.name == "create_file" ? .created : .edited
+                    currentRunCodeChanges.append(CodeChange(filePath: path, operation: op, content: String(result.prefix(2000))))
+                }
+
+                // --- Causal Regression Tracker: analyze build/test failures ---
+                let buildTestTools: Set<String> = ["run_build", "run_tests"]
+                if buildTestTools.contains(call.name), !success {
+                    if let analysis = await regressionTracker.analyze(
+                        errorOutput: result,
+                        failedCommand: call.name,
+                        workingDirectory: workingDirectory
+                    ) {
+                        let analysisMsg = Message(role: .system, content: analysis.markdownSummary)
+                        currentConversation?.messages.append(analysisMsg)
+                    }
+                }
             }
             // Phase 4: Single sync after all tool results instead of per-result
             syncConversation()
@@ -767,6 +973,66 @@ class ChatViewModel: ObservableObject {
         }
 
         activeToolCalls = []
+        streamMetrics.endStream()
+
+        // --- Adversarial Self-Review (Build mode only) ---
+        if agentMode == .fullStack && !currentRunCodeChanges.isEmpty {
+            let userMessage = currentConversation?.messages.last(where: { $0.role == .user })?.content ?? ""
+            if let report = await adversarialReview.review(
+                codeChanges: currentRunCodeChanges,
+                conversationContext: userMessage,
+                apiKey: apiKey,
+                authToken: PlatformService.authToken,
+                primaryModel: effectiveModel
+            ) {
+                let reviewMsg = Message(role: .assistant, content: report.markdownSummary)
+                currentConversation?.messages.append(reviewMsg)
+                syncConversation()
+            }
+        }
+        currentRunCodeChanges = []
+
+        // --- Confidence Calibration: record outcome ---
+        let lastToolResults = activityStore.entries.suffix(10).map { (name: $0.toolName, success: $0.success) }
+        let hasErrors = lastToolResults.contains { !$0.success }
+        confidenceCalibration.recordOutcome(
+            predictedLevel: confidenceCalibration.currentLevel,
+            actualSuccess: !hasErrors
+        )
+
+        // --- Cognitive Loop Detector: record pivot outcome ---
+        let loopPivots = await cognitiveLoopDetector.totalPivots
+        if loopPivots > 0 {
+            await cognitiveLoopDetector.recordPivotOutcome(success: !hasErrors)
+        }
+        await cognitiveLoopDetector.reset()
+
+        // --- Intent Continuity: extract or update intent ---
+        if let firstUserMsg = currentConversation?.messages.first(where: { $0.role == .user })?.content {
+            if intentContinuity.activeIntent == nil {
+                if let extracted = IntentContinuityService.extractIntent(from: firstUserMsg) {
+                    intentContinuity.createIntent(goal: extracted.goal, milestones: extracted.milestones)
+                }
+            } else {
+                intentContinuity.updateActiveIntent(conversationId: currentConversation?.id.uuidString)
+            }
+        }
+
+        // --- Confidence Assessment for next run ---
+        let _ = confidenceCalibration.assess(
+            recentToolResults: lastToolResults,
+            lspDiagnostics: lspDiagnostics,
+            targetFiles: currentRunCodeChanges.map(\.filePath),
+            taskDescription: currentConversation?.messages.last(where: { $0.role == .user })?.content ?? "",
+            memoryHits: 0,
+            loopDetectorPivots: loopPivots
+        )
+
+        // Generate smart follow-up suggestions from the last assistant message
+        if let lastAssistant = currentConversation?.messages.last(where: { $0.role == .assistant }) {
+            followUpSuggestions = FollowUpGenerator.generate(from: lastAssistant.content, agentMode: agentMode)
+        }
+
         flushSync() // Ensure final state is persisted immediately
         saveToProjectMemoryIfEnabled()
         // Notify user of task completion (only fires when app is backgrounded)
@@ -824,6 +1090,120 @@ class ChatViewModel: ObservableObject {
         }
         if PlatformService.isLoggedIn {
             Task { await refreshPlatformUser() }
+        }
+    }
+
+    // MARK: - Speculative Branching Loop
+
+    internal func runSpeculativeBranchLoop(userTask: String) async {
+        let engine = SpeculativeBranchingEngine()
+        let token = PlatformService.authToken
+        let key = apiKey
+
+        // Post a header message
+        let headerMsg = Message(role: .assistant, content: "**Explore Mode** — Generating competing approaches...")
+        currentConversation?.messages.append(headerMsg)
+        syncConversation()
+
+        await engine.run(
+            userTask: userTask,
+            conversationHistory: currentConversation?.messages ?? [],
+            apiKey: key,
+            authToken: (token?.isEmpty == false) ? token : nil,
+            fallbackModel: effectiveModel,
+            onEvent: { [weak self] event in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.handleSpeculativeBranchEvent(event)
+                }
+            }
+        )
+
+        flushSync()
+        saveToProjectMemoryIfEnabled()
+        if let conv = currentConversation {
+            let lastAssistant = conv.messages.last(where: { $0.role == .assistant })?.content ?? "Exploration completed."
+            GRumpNotificationService.shared.notifyTaskComplete(
+                conversationId: conv.id,
+                conversationTitle: conv.title,
+                modelName: effectiveModel.displayName,
+                resultSummary: String(lastAssistant.prefix(200))
+            )
+        }
+        if PlatformService.isLoggedIn {
+            Task { await refreshPlatformUser() }
+        }
+    }
+
+    private func handleSpeculativeBranchEvent(_ event: SpeculativeBranchEvent) {
+        switch event {
+        case .strategiesReady(let strategies):
+            speculativeBranches = strategies.map { strategy in
+                SpeculativeBranchState(
+                    id: strategy.id,
+                    strategyName: strategy.name,
+                    branchIndex: strategy.branchIndex,
+                    status: .pending
+                )
+            }
+            let planLines = strategies.map { s in
+                "• **Approach \(s.branchIndex + 1)**: \(s.name) — \(s.approach)"
+            }.joined(separator: "\n")
+            let planMsg = Message(role: .assistant, content: "**Speculative Branches** — \(strategies.count) approaches:\n\n\(planLines)")
+            currentConversation?.messages.append(planMsg)
+            syncConversation()
+
+        case .branchStarted(let branchId, _, let model):
+            if let idx = speculativeBranches.firstIndex(where: { $0.id == branchId }) {
+                speculativeBranches[idx].status = .running
+                speculativeBranches[idx].modelName = model
+            }
+
+        case .branchChunk(let branchId, let text):
+            if let idx = speculativeBranches.firstIndex(where: { $0.id == branchId }) {
+                speculativeBranches[idx].streamingText += text
+            }
+
+        case .branchCompleted(let branchId, let result):
+            if let idx = speculativeBranches.firstIndex(where: { $0.id == branchId }) {
+                speculativeBranches[idx].status = .completed
+                speculativeBranches[idx].result = result
+            }
+
+        case .branchFailed(let branchId, let error):
+            if let idx = speculativeBranches.firstIndex(where: { $0.id == branchId }) {
+                speculativeBranches[idx].status = .failed
+                speculativeBranches[idx].result = error
+            }
+
+        case .evaluationStarted:
+            for idx in speculativeBranches.indices {
+                if speculativeBranches[idx].status == .completed {
+                    speculativeBranches[idx].status = .evaluating
+                }
+            }
+
+        case .evaluationComplete(let winner, let allResults):
+            for result in allResults {
+                if let idx = speculativeBranches.firstIndex(where: { $0.id == result.id }) {
+                    speculativeBranches[idx].evaluationScore = result.evaluationScore
+                    speculativeBranches[idx].isWinner = result.isWinner
+                    speculativeBranches[idx].status = .completed
+                }
+            }
+            if let winIdx = speculativeBranches.firstIndex(where: { $0.isWinner }) {
+                speculativeWinnerIndex = winIdx
+            }
+
+            // Post the winning response
+            streamingContent = ""
+            let winnerMsg = Message(role: .assistant, content: "**Winner: \(winner.strategyName)** (score: \(Int(winner.evaluationScore * 100))%)\n\(winner.evaluationReason.isEmpty ? "" : "\n*\(winner.evaluationReason)*\n")\n---\n\n\(winner.content)")
+            currentConversation?.messages.append(winnerMsg)
+            syncConversation()
+
+        case .error(let msg):
+            errorMessage = msg
+            streamingContent = ""
         }
     }
 
@@ -924,6 +1304,30 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    /// Appends temporal code intelligence summary (hotspots, coupling, decay) to the system prompt.
+    private func appendTemporalIntelligence(to prompt: inout String) {
+        guard !workingDirectory.isEmpty else { return }
+        if let snapshot = TemporalCodeIntelligenceService.shared.snapshot {
+            let summary = snapshot.promptSummary(maxTokens: 800)
+            if !summary.isEmpty {
+                prompt += "\n\n" + summary
+            }
+        }
+    }
+
+    /// Appends active intent context (cross-session goal continuity) to the system prompt.
+    private func appendIntentContext(to prompt: inout String) {
+        guard let intent = intentContinuity.activeIntent else { return }
+        prompt += "\n\n" + intent.promptFragment
+    }
+
+    /// Appends confidence calibration warning when confidence is low.
+    private func appendConfidenceWarning(to prompt: inout String) {
+        if let fragment = confidenceCalibration.lowConfidencePromptFragment() {
+            prompt += "\n\n" + fragment
+        }
+    }
+
     private func saveToProjectMemoryIfEnabled() {
         let enabled = UserDefaults.standard.object(forKey: "ProjectMemoryEnabled") as? Bool ?? true
         guard enabled, !workingDirectory.isEmpty else { return }
@@ -945,7 +1349,7 @@ class ChatViewModel: ObservableObject {
 
     /// Build a compact summary of tool calls from conversation messages.
     /// e.g. "Edited 3 files (foo.swift, bar.ts, baz.py), ran tests (passed), committed"
-    private func buildToolCallSummary(from messages: [Message]) -> String {
+    func buildToolCallSummary(from messages: [Message]) -> String {
         var toolCounts: [String: Int] = [:]
         var filePaths: [String] = []
         var commandResults: [String] = []

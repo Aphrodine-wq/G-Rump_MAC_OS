@@ -18,12 +18,17 @@ struct RightPanelManager: View {
     var body: some View {
         Group {
             if showRightPanel {
+                #if os(macOS)
                 HSplitView {
                     EmptyView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     rightPanelContent
                         .frame(minWidth: 280, idealWidth: 340, maxWidth: 500)
                 }
+                #else
+                rightPanelContent
+                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 500)
+                #endif
             } else {
                 EmptyView()
             }
@@ -82,6 +87,8 @@ struct RightPanelManager: View {
             AppStoreToolsView()
         case .accessibility:
             AccessibilityAuditView()
+        case .memory:
+            MemoryPanel()
         }
     }
     

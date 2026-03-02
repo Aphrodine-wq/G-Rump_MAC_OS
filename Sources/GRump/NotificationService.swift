@@ -2,6 +2,8 @@ import Foundation
 import UserNotifications
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 // MARK: - G-Rump Notification Service
@@ -48,8 +50,13 @@ final class GRumpNotificationService: NSObject, ObservableObject {
     private var center: UNUserNotificationCenter?
 
     private override init() {
-        // Safely get notification center — may not be available in command-line builds
-        self.center = UNUserNotificationCenter.current()
+        // UNUserNotificationCenter.current() crashes in command-line / SPM builds
+        // that lack a proper app bundle. Guard with bundleIdentifier check.
+        if Bundle.main.bundleIdentifier != nil {
+            self.center = UNUserNotificationCenter.current()
+        } else {
+            self.center = nil
+        }
         super.init()
         if let center = center {
             center.delegate = self
@@ -238,6 +245,8 @@ final class GRumpNotificationService: NSObject, ObservableObject {
             "command": command
         ]
 
+        pendingApprovalId = approvalId
+
         let request = UNNotificationRequest(
             identifier: "approval-\(UUID().uuidString)",
             content: content,
@@ -370,6 +379,7 @@ extension GRumpNotificationService: UNUserNotificationCenterDelegate {
         case GRumpNotificationAction.approveAction:
             if let approvalId = userInfo["approvalId"] as? String {
                 await MainActor.run {
+                    self.pendingApprovalId = nil
                     NotificationCenter.default.post(
                         name: .init("GRumpApproveAction"),
                         object: nil,
@@ -381,6 +391,7 @@ extension GRumpNotificationService: UNUserNotificationCenterDelegate {
         case GRumpNotificationAction.denyAction:
             if let approvalId = userInfo["approvalId"] as? String {
                 await MainActor.run {
+                    self.pendingApprovalId = nil
                     NotificationCenter.default.post(
                         name: .init("GRumpDenyAction"),
                         object: nil,

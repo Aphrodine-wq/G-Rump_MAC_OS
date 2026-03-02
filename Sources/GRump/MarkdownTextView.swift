@@ -82,12 +82,14 @@ struct MarkdownTextView: View {
 
     private enum Block {
         case codeBlock(language: String, code: String)
+        case streamingCodeBlock(language: String, code: String)
         case paragraph(String)
         case header(Int, String)
         case listItem(indent: Int, ordered: Bool, number: Int, content: String)
         case blockquote(String)
         case horizontalRule
         case table(headers: [String], rows: [[String]])
+        case collapsibleSection(summary: String, content: String, isOpen: Bool)
     }
 
     private func parseOnBackground(_ input: String) {
@@ -117,9 +119,11 @@ struct MarkdownTextView: View {
         case .paragraph: return 12
         case .listItem: return 4
         case .codeBlock: return 16
+        case .streamingCodeBlock: return 16
         case .blockquote: return 12
         case .horizontalRule: return 16
         case .table: return 16
+        case .collapsibleSection: return 12
         }
     }
 
@@ -131,12 +135,15 @@ struct MarkdownTextView: View {
         case .codeBlock(let language, let code):
             CodeBlockView(language: language, code: code)
 
+        case .streamingCodeBlock(let language, let code):
+            StreamingCodeBlockView(language: language, code: code, isStreaming: true)
+
         case .paragraph(let content):
             buildInlineText(content)
                 .font(Typography.bodyScaled(scale: themeManager.contentSize.scaleFactor))
                 .foregroundColor(themeManager.palette.textPrimary)
                 .textSelection(.enabled)
-                .lineSpacing(3)
+                .lineSpacing(Typography.userLineSpacing)
 
         case .header(let level, let content):
             buildInlineText(content)
@@ -153,7 +160,7 @@ struct MarkdownTextView: View {
                 buildInlineText(content)
                     .font(bodyFont)
                     .foregroundColor(themeManager.palette.textPrimary)
-                    .lineSpacing(2)
+                    .lineSpacing(Typography.userLineSpacing * 0.67)
             }
             .padding(.leading, CGFloat(indent) * 20)
 
@@ -166,7 +173,7 @@ struct MarkdownTextView: View {
                     .font(Typography.bodyScaled(scale: themeManager.contentSize.scaleFactor))
                     .foregroundColor(themeManager.palette.textSecondary)
                     .italic()
-                    .lineSpacing(2)
+                    .lineSpacing(Typography.userLineSpacing * 0.67)
                     .padding(.leading, Spacing.xxl)
             }
 
@@ -178,6 +185,9 @@ struct MarkdownTextView: View {
 
         case .table(let headers, let rows):
             tableView(headers: headers, rows: rows)
+
+        case .collapsibleSection(let summary, let content, _):
+            CollapsibleSectionView(summary: summary, content: content)
         }
     }
 
@@ -245,12 +255,49 @@ struct MarkdownTextView: View {
                 let language = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 var codeLines: [String] = []
                 i += 1
-                while i < lines.count && !lines[i].hasPrefix("```") {
+                var foundClosing = false
+                while i < lines.count {
+                    if lines[i].hasPrefix("```") {
+                        foundClosing = true
+                        i += 1 // Skip closing ```
+                        break
+                    }
                     codeLines.append(lines[i])
                     i += 1
                 }
-                i += 1 // Skip closing ```
-                blocks.append(.codeBlock(language: language, code: codeLines.joined(separator: "\n")))
+                if foundClosing {
+                    blocks.append(.codeBlock(language: language, code: codeLines.joined(separator: "\n")))
+                } else {
+                    // Unclosed code block = still streaming
+                    blocks.append(.streamingCodeBlock(language: language, code: codeLines.joined(separator: "\n")))
+                }
+                continue
+            }
+
+            // Collapsible section: <details> ... </details>
+            let trimmedForDetails = line.trimmingCharacters(in: .whitespaces)
+            if trimmedForDetails.lowercased().hasPrefix("<details") {
+                var summaryText = "Details"
+                var contentLines: [String] = []
+                i += 1
+                // Look for <summary>
+                if i < lines.count {
+                    let summaryLine = lines[i].trimmingCharacters(in: .whitespaces)
+                    if summaryLine.lowercased().hasPrefix("<summary>") {
+                        summaryText = summaryLine
+                            .replacingOccurrences(of: "<summary>", with: "", options: .caseInsensitive)
+                            .replacingOccurrences(of: "</summary>", with: "", options: .caseInsensitive)
+                            .trimmingCharacters(in: .whitespaces)
+                        i += 1
+                    }
+                }
+                while i < lines.count && !lines[i].trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("</details") {
+                    contentLines.append(lines[i])
+                    i += 1
+                }
+                if i < lines.count { i += 1 } // Skip </details>
+                let isOpen = trimmedForDetails.lowercased().contains("open")
+                blocks.append(.collapsibleSection(summary: summaryText, content: contentLines.joined(separator: "\n"), isOpen: isOpen))
                 continue
             }
 
@@ -579,6 +626,10 @@ struct MarkdownTextView: View {
             let headerLength = headers.joined().count
             let rowLength = rows.flatMap { $0 }.joined().count
             return headerLength + rowLength
+        case .streamingCodeBlock(_, let code):
+            return code.count + 3 // ```\n... (no closing)
+        case .collapsibleSection(_, let content, _):
+            return content.count + 20 // <details>...</details>
         }
     }
     

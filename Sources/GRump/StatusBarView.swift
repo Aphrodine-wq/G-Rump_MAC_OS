@@ -13,6 +13,7 @@ struct StatusBarView: View {
                 Circle()
                     .fill(connectionColor)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel(connectionStatus)
                 
                 Text(connectionStatus)
                     .font(Typography.micro)
@@ -57,6 +58,19 @@ struct StatusBarView: View {
                 .help(perfAdvisor.statusSummary)
             }
 
+            // Confidence calibration indicator
+            if let report = viewModel.confidenceCalibration.currentReport {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: report.level.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(confidenceColor(report.level))
+                    Text("\(Int(report.overallScore * 100))%")
+                        .font(Typography.micro)
+                        .foregroundColor(confidenceColor(report.level))
+                }
+                .help("Confidence: \(report.level.label) — \(report.summary)")
+            }
+
             // Right section - errors and info
             HStack(spacing: Spacing.md) {
                 if let error = viewModel.errorMessage {
@@ -96,15 +110,34 @@ struct StatusBarView: View {
         )
     }
     
+    private func confidenceColor(_ level: ConfidenceLevel) -> Color {
+        switch level {
+        case .veryLow:  return .red
+        case .low:      return .accentOrange
+        case .moderate: return .yellow
+        case .high:     return .accentGreen
+        case .veryHigh: return .blue
+        }
+    }
+
     private var connectionColor: Color {
         if viewModel.isLoading { return .accentGreen }
-        return viewModel.platformUser != nil ? .accentGreen : .accentOrange
+        switch ConnectionMonitor.shared.status {
+        case .connected: return .accentGreen
+        case .degraded: return .accentOrange
+        case .disconnected: return .red
+        case .checking: return .accentOrange
+        }
     }
-    
+
     private var connectionStatus: String {
         if viewModel.isLoading { return "Streaming..." }
-        if viewModel.platformUser != nil { return "Connected" }
-        return "Guest mode"
+        switch ConnectionMonitor.shared.status {
+        case .connected: return viewModel.platformUser != nil ? "Connected" : "Guest mode"
+        case .degraded(let reason): return "Degraded: \(reason)"
+        case .disconnected: return "Disconnected"
+        case .checking: return "Checking..."
+        }
     }
 }
 
@@ -123,8 +156,8 @@ struct GitShortcutsPopover: View {
             GitShortcutButton(label: "Status", shortcut: "⌘⇧G S") {
                 runGitCommand("status")
             }
-            GitShortcutButton(label: "Commit", shortcut: "⌘⇧G C") {
-                runGitCommand("commit")
+            GitShortcutButton(label: "Commit All", shortcut: "⌘⇧G C") {
+                runGitCommand("commit -a -m auto-commit")
             }
             GitShortcutButton(label: "Push", shortcut: "⌘⇧G P") {
                 runGitCommand("push")
@@ -140,6 +173,8 @@ struct GitShortcutsPopover: View {
         .frame(width: 180)
     }
     
+    @State private var gitOutput: String = ""
+
     private func runGitCommand(_ args: String) {
         #if os(macOS)
         Task {
@@ -147,11 +182,23 @@ struct GitShortcutsPopover: View {
             process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
             process.arguments = args.components(separatedBy: " ")
             process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            try? process.run()
-            process.waitUntilExit()
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
+            process.standardOutput = stdoutPipe
+            process.standardError = stderrPipe
+            do {
+                try process.run()
+                process.waitUntilExit()
+                let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                let output = (String(data: outData, encoding: .utf8) ?? "")
+                    + (String(data: errData, encoding: .utf8) ?? "")
+                GRumpLogger.general.info("Git: \(args) -> \(output.prefix(500))")
+                gitOutput = output
+            } catch {
+                GRumpLogger.general.error("Git command failed: \(error.localizedDescription)")
+                gitOutput = "Error: \(error.localizedDescription)"
+            }
         }
         #endif
     }

@@ -8,7 +8,7 @@ struct MCPServerPreset: Identifiable {
     let icon: String
 
     func toConfig() -> MCPServerConfig {
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        let homeDir = NSHomeDirectory()
         switch id {
         case "memory":
             return MCPServerConfig(id: "memory", name: "Memory", enabled: true,
@@ -313,12 +313,21 @@ extension MCPServerConfig {
     enum Transport: Codable, Equatable {
         case stdio(command: String, args: [String])
         case http(url: String)
+        case websocket(url: String)
 
         enum CodingKeys: String, CodingKey {
             case type
             case command
             case args
             case url
+        }
+
+        var displayName: String {
+            switch self {
+            case .stdio: return "stdio"
+            case .http: return "HTTP"
+            case .websocket: return "WebSocket"
+            }
         }
 
         init(from decoder: Decoder) throws {
@@ -332,6 +341,9 @@ extension MCPServerConfig {
             case "http":
                 let url = try c.decode(String.self, forKey: .url)
                 self = .http(url: url)
+            case "websocket":
+                let url = try c.decode(String.self, forKey: .url)
+                self = .websocket(url: url)
             default:
                 throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Unknown transport: \(type)")
             }
@@ -347,6 +359,9 @@ extension MCPServerConfig {
             case .http(let url):
                 try c.encode("http", forKey: .type)
                 try c.encode(url, forKey: .url)
+            case .websocket(let url):
+                try c.encode("websocket", forKey: .type)
+                try c.encode(url, forKey: .url)
             }
         }
     }
@@ -358,7 +373,7 @@ struct MCPServersFile: Codable {
 
 enum MCPServerConfigStorage {
     private static var configDirectory: String {
-        (FileManager.default.homeDirectoryForCurrentUser.path as NSString)
+        (NSHomeDirectory() as NSString)
             .appendingPathComponent(".grump")
     }
 

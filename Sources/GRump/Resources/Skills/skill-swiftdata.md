@@ -1,6 +1,7 @@
 ---
 name: SwiftData Migration
 description: Migrate Core Data models and stacks to SwiftData with modern Swift concurrency.
+tags: [swiftdata, core-data, swift, persistence, migration, apple]
 ---
 
 # SwiftData Migration

@@ -40,4 +40,267 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(conv.title.count, 41)
         XCTAssertTrue(conv.title.hasSuffix("…"))
     }
+
+    // MARK: - Message Expanded
+
+    func testAllMessageRoles() {
+        let roles: [Message.Role] = [.user, .assistant, .system, .tool]
+        XCTAssertEqual(roles.count, 4)
+        for role in roles {
+            let msg = Message(role: role, content: "test")
+            XCTAssertEqual(msg.role, role)
+        }
+    }
+
+    func testMessageDefaultValues() {
+        let msg = Message(role: .user, content: "hi")
+        XCTAssertNotNil(msg.id)
+        XCTAssertNotNil(msg.timestamp)
+        XCTAssertNil(msg.toolCallId)
+        XCTAssertNil(msg.toolCalls)
+        XCTAssertNil(msg.parentMessageId)
+        XCTAssertNil(msg.branchId)
+        XCTAssertNil(msg.threadId)
+        XCTAssertFalse(msg.isBranch)
+        XCTAssertNil(msg.branchName)
+        XCTAssertTrue(msg.children.isEmpty)
+    }
+
+    func testMessageWithToolCalls() throws {
+        var msg = Message(role: .assistant, content: "Using tools")
+        msg.toolCalls = [
+            ToolCall(id: "tc1", name: "read_file", arguments: "{\"path\":\"/a.swift\"}")
+        ]
+        let data = try JSONEncoder().encode(msg)
+        let decoded = try JSONDecoder().decode(Message.self, from: data)
+        XCTAssertEqual(decoded.toolCalls?.count, 1)
+        XCTAssertEqual(decoded.toolCalls?.first?.name, "read_file")
+    }
+
+    func testMessageEquatable() {
+        let id = UUID()
+        let ts = Date()
+        let a = Message(id: id, role: .user, content: "hi", timestamp: ts)
+        let b = Message(id: id, role: .user, content: "hi", timestamp: ts)
+        XCTAssertEqual(a, b)
+    }
+
+    func testMessageEmptyContent() {
+        let msg = Message(role: .user, content: "")
+        XCTAssertTrue(msg.content.isEmpty)
+    }
+
+    func testMessageRoleCodable() throws {
+        for role in [Message.Role.user, .assistant, .system, .tool] {
+            let data = try JSONEncoder().encode(role)
+            let decoded = try JSONDecoder().decode(Message.Role.self, from: data)
+            XCTAssertEqual(decoded, role)
+        }
+    }
+
+    // MARK: - ToolCall
+
+    func testToolCallCreation() {
+        let tc = ToolCall(id: "tc-1", name: "write_file", arguments: "{}")
+        XCTAssertEqual(tc.id, "tc-1")
+        XCTAssertEqual(tc.name, "write_file")
+        XCTAssertEqual(tc.arguments, "{}")
+    }
+
+    func testToolCallCodable() throws {
+        let tc = ToolCall(id: "tc-2", name: "run_command", arguments: "{\"cmd\":\"ls\"}")
+        let data = try JSONEncoder().encode(tc)
+        let decoded = try JSONDecoder().decode(ToolCall.self, from: data)
+        XCTAssertEqual(decoded.id, tc.id)
+        XCTAssertEqual(decoded.name, tc.name)
+        XCTAssertEqual(decoded.arguments, tc.arguments)
+    }
+
+    func testToolCallEquatable() {
+        let a = ToolCall(id: "x", name: "y", arguments: "z")
+        let b = ToolCall(id: "x", name: "y", arguments: "z")
+        XCTAssertEqual(a, b)
+    }
+
+    // MARK: - ToolCallStatus
+
+    func testToolCallStatusCreation() {
+        let status = ToolCallStatus(
+            id: "s1", name: "read_file", arguments: "{}",
+            status: .running, result: nil
+        )
+        XCTAssertEqual(status.id, "s1")
+        XCTAssertEqual(status.name, "read_file")
+        XCTAssertEqual(status.status, .running)
+        XCTAssertNil(status.result)
+    }
+
+    func testToolCallStatusAllStates() {
+        let states: [ToolCallStatus.ToolRunStatus] = [.pending, .running, .completed, .failed, .cancelled]
+        XCTAssertEqual(states.count, 5)
+    }
+
+    func testToolCallStatusCompleted() {
+        let status = ToolCallStatus(
+            id: "s2", name: "run_command", arguments: "{}",
+            status: .completed, result: "Success"
+        )
+        XCTAssertEqual(status.status, .completed)
+        XCTAssertEqual(status.result, "Success")
+    }
+
+    // MARK: - SystemRunHistoryEntry
+
+    func testSystemRunHistoryEntryCreation() {
+        let entry = SystemRunHistoryEntry(
+            command: "swift build",
+            resolvedPath: "/usr/bin/swift",
+            allowed: true
+        )
+        XCTAssertEqual(entry.command, "swift build")
+        XCTAssertEqual(entry.resolvedPath, "/usr/bin/swift")
+        XCTAssertTrue(entry.allowed)
+        XCTAssertNotNil(entry.id)
+    }
+
+    func testSystemRunHistoryEntryDenied() {
+        let entry = SystemRunHistoryEntry(
+            command: "rm -rf /",
+            resolvedPath: "/bin/rm",
+            allowed: false
+        )
+        XCTAssertFalse(entry.allowed)
+    }
+
+    // MARK: - Conversation Expanded
+
+    func testConversationDefaults() {
+        let conv = Conversation(title: "Test")
+        XCTAssertNotNil(conv.id)
+        XCTAssertEqual(conv.title, "Test")
+        XCTAssertTrue(conv.messages.isEmpty)
+        XCTAssertTrue(conv.threads.isEmpty)
+        XCTAssertTrue(conv.branches.isEmpty)
+        XCTAssertNil(conv.activeThreadId)
+        XCTAssertEqual(conv.viewMode, .linear)
+    }
+
+    func testConversationViewModes() {
+        let modes = Conversation.ConversationViewMode.allCases
+        XCTAssertEqual(modes.count, 3)
+        XCTAssertTrue(modes.contains(.linear))
+        XCTAssertTrue(modes.contains(.threaded))
+        XCTAssertTrue(modes.contains(.branched))
+    }
+
+    func testConversationViewModeCodable() throws {
+        for mode in Conversation.ConversationViewMode.allCases {
+            let data = try JSONEncoder().encode(mode)
+            let decoded = try JSONDecoder().decode(Conversation.ConversationViewMode.self, from: data)
+            XCTAssertEqual(decoded, mode)
+        }
+    }
+
+    func testConversationUpdateTitleNoUserMessage() {
+        var conv = Conversation(title: "Original")
+        conv.messages.append(Message(role: .assistant, content: "Hello!"))
+        conv.updateTitle()
+        XCTAssertEqual(conv.title, "Original", "Title should not change without user messages")
+    }
+
+    func testConversationUpdateTitleShortMessage() {
+        var conv = Conversation(title: "New Chat")
+        conv.messages.append(Message(role: .user, content: "Hi"))
+        conv.updateTitle()
+        XCTAssertEqual(conv.title, "Hi")
+    }
+
+    func testConversationEquatable() {
+        let id = UUID()
+        let a = Conversation(id: id, title: "T")
+        let b = Conversation(id: id, title: "T")
+        XCTAssertEqual(a, b)
+    }
+
+    func testConversationGetActiveThreadMessagesDefault() {
+        var conv = Conversation(title: "T")
+        conv.messages = [
+            Message(role: .user, content: "a"),
+            Message(role: .assistant, content: "b"),
+        ]
+        let active = conv.getActiveThreadMessages()
+        XCTAssertEqual(active.count, 2, "With no active thread, all messages returned")
+    }
+
+    func testConversationCreateThread() {
+        var conv = Conversation(title: "T")
+        let msg = Message(role: .user, content: "Start thread")
+        conv.messages.append(msg)
+        let threadId = conv.createThread(from: msg.id, name: "Thread 1")
+        XCTAssertNotNil(threadId)
+        XCTAssertEqual(conv.threads.count, 1)
+        XCTAssertEqual(conv.activeThreadId, threadId)
+    }
+
+    func testConversationCreateThreadInvalidMessage() {
+        var conv = Conversation(title: "T")
+        let threadId = conv.createThread(from: UUID())
+        XCTAssertNil(threadId, "Should return nil for nonexistent message")
+    }
+
+    func testConversationCreateBranch() {
+        var conv = Conversation(title: "T")
+        let msg = Message(role: .user, content: "Branch point")
+        conv.messages.append(msg)
+        let branchId = conv.createBranch(from: msg.id, name: "Alt Path")
+        XCTAssertNotNil(branchId)
+        XCTAssertEqual(conv.branches.count, 1)
+        XCTAssertEqual(conv.branches.first?.name, "Alt Path")
+    }
+
+    func testConversationCreateBranchInvalidMessage() {
+        var conv = Conversation(title: "T")
+        let branchId = conv.createBranch(from: UUID(), name: "X")
+        XCTAssertNil(branchId)
+    }
+
+    // MARK: - MessageThread
+
+    func testMessageThreadCreation() {
+        let rootId = UUID()
+        let thread = MessageThread(name: "My Thread", rootMessageId: rootId)
+        XCTAssertNotNil(thread.id)
+        XCTAssertEqual(thread.name, "My Thread")
+        XCTAssertEqual(thread.rootMessageId, rootId)
+        XCTAssertTrue(thread.isActive)
+    }
+
+    func testMessageThreadCodable() throws {
+        let thread = MessageThread(name: "T", rootMessageId: UUID())
+        let data = try JSONEncoder().encode(thread)
+        let decoded = try JSONDecoder().decode(MessageThread.self, from: data)
+        XCTAssertEqual(decoded.id, thread.id)
+        XCTAssertEqual(decoded.name, thread.name)
+    }
+
+    // MARK: - MessageBranch
+
+    func testMessageBranchCreation() {
+        let pid = UUID()
+        let bpid = UUID()
+        let branch = MessageBranch(name: "Alt", parentMessageId: pid, branchPointMessageId: bpid)
+        XCTAssertNotNil(branch.id)
+        XCTAssertEqual(branch.name, "Alt")
+        XCTAssertEqual(branch.parentMessageId, pid)
+        XCTAssertEqual(branch.branchPointMessageId, bpid)
+        XCTAssertTrue(branch.isActive)
+    }
+
+    func testMessageBranchCodable() throws {
+        let branch = MessageBranch(name: "B", parentMessageId: UUID(), branchPointMessageId: UUID())
+        let data = try JSONEncoder().encode(branch)
+        let decoded = try JSONDecoder().decode(MessageBranch.self, from: data)
+        XCTAssertEqual(decoded.id, branch.id)
+        XCTAssertEqual(decoded.name, branch.name)
+    }
 }

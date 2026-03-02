@@ -34,10 +34,17 @@ struct SplashScreenView: View {
                 // Face
                 ZStack {
                     // Glow ring behind face
-                    Circle()
-                        .fill(themeManager.palette.effectiveAccent.opacity(glowOpacity * 0.15))
-                        .frame(width: faceSize * 1.6, height: faceSize * 1.6)
-                        .blur(radius: 30)
+                    RadialGradient(
+                        colors: [
+                            themeManager.palette.effectiveAccent.opacity(glowOpacity * 0.18),
+                            themeManager.palette.effectiveAccent.opacity(glowOpacity * 0.05),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: faceSize * 0.3,
+                        endRadius: faceSize * 1.0
+                    )
+                    .frame(width: faceSize * 2.2, height: faceSize * 2.2)
 
                     // Face circle — white with gradient border
                     Circle()
@@ -81,7 +88,7 @@ struct SplashScreenView: View {
                         )
                         .frame(width: faceSize, height: faceSize)
                 }
-                .drawingGroup()
+                .compositingGroup()
                 .scaleEffect(faceScale)
 
                 // Title (no tagline)
@@ -118,6 +125,9 @@ struct SplashScreenView: View {
             }
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(1200))
+                #if os(macOS)
+                NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [.announcement: "G-Rump is ready"])
+                #endif
                 onFinished()
             }
             return
@@ -152,6 +162,9 @@ struct SplashScreenView: View {
         }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(2050))
+            #if os(macOS)
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [.announcement: "G-Rump is ready"])
+            #endif
             onFinished()
         }
     }

@@ -40,9 +40,20 @@ jobs:
   lint:
     name: Code Quality
     runs-on: macos-14
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint || true
+
+      - name: Run SwiftLint
+        run: |
+          if command -v swiftlint &>/dev/null; then
+            swiftlint lint --strict --reporter github-actions-logging Sources/GRump/ || exit 1
+          else
+            echo "::warning::SwiftLint not installed, skipping lint checks"
+          fi
 
       - name: Check for force unwraps (non-constant)
         run: |
@@ -61,7 +72,7 @@ jobs:
 
       - name: Check for print() statements
         run: |
-          PRINTS=$(grep -rn 'print(' Sources/GRump/*.swift 2>/dev/null \
+          PRINTS=$(grep -rn --include='*.swift' 'print(' Sources/GRump/ 2>/dev/null \
             | grep -v 'Text("print' \
             | grep -v "python3.*print" \
             | grep -v "bc.*print" \
@@ -78,11 +89,38 @@ jobs:
       - name: Verify LICENSE exists
         run: test -f LICENSE
 
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Run backend tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test-ci-secret-key
+          CORS_ORIGIN: http://localhost:3000
+
   release:
     name: Release Build
     runs-on: macos-14
     timeout-minutes: 30
-    needs: [critical-tests, lint]
+    needs: [critical-tests, lint, backend-tests]
     steps:
       - uses: actions/checkout@v4
 
@@ -101,3 +139,10 @@ jobs:
 
       - name: Package .app bundle
         run: make app
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: G-Rump-${{ github.sha }}
+          path: dist/G-Rump.app
+          retention-days: 30

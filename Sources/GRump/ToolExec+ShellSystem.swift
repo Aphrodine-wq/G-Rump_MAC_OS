@@ -17,6 +17,7 @@ extension ChatViewModel {
 
     func executeRunBackground(_ args: [String: Any]) async -> String {
         guard let command = args["command"] as? String else { return "Error: missing command" }
+        #if os(macOS)
         let cwd = (args["cwd"] as? String).map { resolvePath($0) } ?? (workingDirectory.isEmpty ? nil : workingDirectory)
         return await withCheckedContinuation { cont in
             DispatchQueue.global().async {
@@ -34,17 +35,25 @@ extension ChatViewModel {
                 }
             }
         }
+        #else
+        return "Error: run_background is not available on iOS"
+        #endif
     }
 
     func executeKillProcess(_ args: [String: Any]) async -> String {
         guard let pid = args["pid"] as? Int else { return "Error: missing pid" }
         let sig = args["signal"] as? Int ?? 15
-        return await runShellCommand("kill -\(sig) \(pid)", cwd: nil, timeoutSeconds: 5)
+        return await runProcess(executablePath: "/bin/kill", arguments: ["-\(sig)", "\(pid)"], cwd: nil, stdoutLimitLines: 10)
     }
 
     func executeWhich(_ args: [String: Any]) async -> String {
         guard let name = args["name"] as? String else { return "Error: missing name" }
-        return await runShellCommand("which \(name.replacingOccurrences(of: "'", with: "'\\''"))", cwd: nil, timeoutSeconds: 5)
+        // Validate executable name contains only safe characters
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.+"))
+        guard name.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return "Error: invalid executable name"
+        }
+        return await runProcess(executablePath: "/usr/bin/which", arguments: [name], cwd: nil, stdoutLimitLines: 10)
     }
 
     // MARK: - Environment
@@ -88,18 +97,20 @@ extension ChatViewModel {
     func executeListProcesses(_ args: [String: Any]) async -> String {
         let filter = args["filter"] as? String
         let limit = args["limit"] as? Int ?? 50
-        let cmd: String
+        let output = await runProcess(executablePath: "/bin/ps", arguments: ["-eo", "pid,comm"], cwd: nil, stdoutLimitLines: limit + 100)
+        var lines = output.components(separatedBy: "\n")
+        // Remove header
+        if !lines.isEmpty { lines.removeFirst() }
+        // Apply filter in Swift
         if let f = filter, !f.isEmpty {
-            cmd = "ps -eo pid,comm | head -\(limit + 10) | grep -i '\(f.replacingOccurrences(of: "'", with: "'\\''"))' | head -\(limit)"
-        } else {
-            cmd = "ps -eo pid,comm 2>/dev/null | tail -n +2 | head -\(limit)"
+            lines = lines.filter { $0.localizedCaseInsensitiveContains(f) }
         }
-        return await runShellCommand(cmd, cwd: nil, timeoutSeconds: 5)
+        return Array(lines.prefix(limit)).joined(separator: "\n")
     }
 
     func executeDiskUsage(_ args: [String: Any]) async -> String {
         let path = (args["path"] as? String).map { resolvePath($0) } ?? (workingDirectory.isEmpty ? FileManager.default.currentDirectoryPath : workingDirectory)
-        return await runShellCommand("df -h '\(path.replacingOccurrences(of: "'", with: "'\\''"))' 2>/dev/null || df -h .", cwd: nil, timeoutSeconds: 5)
+        return await runProcess(executablePath: "/bin/df", arguments: ["-h", path], cwd: nil, stdoutLimitLines: 20)
     }
 
     // MARK: - System Info

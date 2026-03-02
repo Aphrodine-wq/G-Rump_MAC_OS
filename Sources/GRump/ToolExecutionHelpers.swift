@@ -67,6 +67,7 @@ extension ChatViewModel {
     }
     
     func runProcess(executablePath: String, arguments: [String], cwd: String?, stdoutLimitLines: Int?) async -> String {
+        #if os(macOS)
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 let process = Process()
@@ -100,6 +101,9 @@ extension ChatViewModel {
                 }
             }
         }
+        #else
+        return "Error: process execution not available on iOS"
+        #endif
     }
     
     // MARK: - Path Resolution

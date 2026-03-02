@@ -82,7 +82,7 @@ class OpenRouterService {
         request.timeoutInterval = 180
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("https://grump.app", forHTTPHeaderField: "HTTP-Referer")
+        request.addValue("https://www.g-rump.com", forHTTPHeaderField: "HTTP-Referer")
         request.addValue("G-Rump", forHTTPHeaderField: "X-Title")
         #if os(macOS)
         request.addValue("macos-native", forHTTPHeaderField: "X-Client-Platform")
@@ -336,6 +336,60 @@ enum SSELineParser {
             if let done = json["done"] as? Bool, done {
                 continuation.yield(.done("stop"))
                 return
+            }
+        }
+    }
+
+    /// Parse a Google Gemini SSE stream (streamGenerateContent).
+    static func parseGoogleSSE(
+        bytes: URLSession.AsyncBytes,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) async throws {
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let payload = String(line.dropFirst(6))
+            guard let jsonData = payload.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
+
+            // Gemini wraps content in candidates[0].content.parts[]
+            guard let candidates = json["candidates"] as? [[String: Any]],
+                  let first = candidates.first,
+                  let content = first["content"] as? [String: Any],
+                  let parts = content["parts"] as? [[String: Any]] else {
+                // Check for finish reason at top level
+                if let candidates = json["candidates"] as? [[String: Any]],
+                   let first = candidates.first,
+                   let finishReason = first["finishReason"] as? String {
+                    continuation.yield(.done(finishReason.lowercased()))
+                }
+                continue
+            }
+
+            for part in parts {
+                if let text = part["text"] as? String, !text.isEmpty {
+                    continuation.yield(.text(text))
+                }
+                // Handle function calls from Gemini
+                if let functionCall = part["functionCall"] as? [String: Any],
+                   let name = functionCall["name"] as? String {
+                    let argsDict = functionCall["args"] as? [String: Any] ?? [:]
+                    let argsJSON = (try? JSONSerialization.data(withJSONObject: argsDict))
+                        .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+                    let toolDelta = ToolCallDelta(
+                        index: 0,
+                        id: UUID().uuidString,
+                        type: "function",
+                        function: ToolCallFunctionDelta(name: name, arguments: argsJSON)
+                    )
+                    continuation.yield(.toolCallDelta([toolDelta]))
+                }
+            }
+
+            // Check finish reason
+            if let finishReason = first["finishReason"] as? String,
+               finishReason != "STOP" || finishReason == "STOP" {
+                let reason = finishReason == "STOP" ? "stop" : finishReason.lowercased()
+                continuation.yield(.done(reason))
             }
         }
     }

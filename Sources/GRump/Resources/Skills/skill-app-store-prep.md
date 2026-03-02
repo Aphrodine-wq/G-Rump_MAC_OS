@@ -1,6 +1,7 @@
 ---
 name: App Store Prep
 description: Prepare apps for App Store submission with review guidelines compliance and metadata optimization.
+tags: [app-store, apple, ios, macos, distribution, review-guidelines]
 ---
 
 # App Store Prep
@@ -36,3 +37,17 @@ You are an expert at preparing apps for App Store submission.
 - Include PrivacyInfo.xcprivacy with all required API declarations.
 - Declare all tracking domains and data collection categories.
 - Ensure third-party SDKs include their own privacy manifests.
+
+## Anti-Patterns
+- Submitting without testing on the oldest supported OS version
+- Leaving test/debug endpoints or analytics keys in release builds
+- Ignoring App Store Review Guidelines updates between submissions
+- Using undocumented APIs that pass review once but get rejected on updates
+- Screenshots that don't match the actual app UI
+
+## Verification
+- App runs correctly on all target device sizes and OS versions
+- All privacy descriptions are present and accurate in Info.plist
+- `nm` and `otool` show no private API usage
+- Privacy report from Xcode shows no undeclared API usage
+- In-app purchases work correctly in sandbox environment

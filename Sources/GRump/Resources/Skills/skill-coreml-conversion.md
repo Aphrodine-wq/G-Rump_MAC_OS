@@ -1,6 +1,7 @@
 ---
 name: Core ML Conversion
 description: Convert ML models from PyTorch, TensorFlow, and ONNX to Core ML format for on-device inference.
+tags: [coreml, machine-learning, apple, pytorch, on-device, optimization]
 ---
 
 # Core ML Conversion
@@ -39,3 +40,16 @@ mlmodel.save("Model.mlpackage")
 - Use MLComputeUnits.all for best Apple Silicon performance.
 - Include metadata: author, description, license, version.
 - Create manifest.json alongside .mlmodelc for G-Rump integration.
+
+## Anti-Patterns
+- Converting without testing output accuracy (silent precision loss)
+- Using .cpuOnly when Neural Engine is available (massive perf loss)
+- Skipping quantization for on-device models (unnecessary memory usage)
+- Not specifying input shapes (causes dynamic shape overhead)
+- Ignoring model size — large models cause app launch delays
+
+## Verification
+- Converted model output matches original within acceptable tolerance (e.g., cosine similarity > 0.99)
+- Model loads and runs on target device without crashes
+- Inference latency meets real-time requirements on lowest supported hardware
+- Model file size is acceptable for app bundle or on-demand download

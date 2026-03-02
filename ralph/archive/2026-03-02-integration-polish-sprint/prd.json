@@ -1,0 +1,174 @@
+{
+  "project": "G-Rump",
+  "branchName": "ralph/integration-polish-sprint",
+  "description": "Close integration gaps in shipped subsystems: fix tier mapping, wire OpenClaw end-to-end, start MCP server, polish BillingView, and harden CI.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix PlatformService starter tier mapping",
+      "description": "As a starter-tier user, I want to see my correct tier name and credit limit so that I'm not incorrectly shown as Free/500.",
+      "acceptanceCriteria": [
+        "Add case \"starter\": return \"Starter\" to PlatformService.tierDisplayName(_:)",
+        "Add case \"starter\": return 2000 to the file-level tierCreditsPerMonth(_:) function",
+        "Existing free, pro, team mappings unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Restore OpenClawService settings from UserDefaults on init",
+      "description": "As a user, I want my OpenClaw settings (isEnabled, gatewayURL) to persist across app restarts so I don't have to reconfigure every launch.",
+      "acceptanceCriteria": [
+        "Add UserDefaults persistence keys (e.g. OpenClaw_Enabled, OpenClaw_GatewayURL)",
+        "In init(), read saved values from UserDefaults falling back to current defaults",
+        "Add didSet observers on isEnabled and gatewayURL that write to UserDefaults",
+        "Follow same pattern as OpenClawCostControl (lines 23-35, 61-93)",
+        "Setting isEnabled = true persists across app restart",
+        "Changing gatewayURL persists across app restart",
+        "Default values are false and ws://127.0.0.1:18789 for fresh installs",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Fix OpenClawCostControl.currentPolicy() hardcoded values",
+      "description": "As a user, I want the cost policy sent to the OpenClaw gateway to reflect my actual configured limits, not hardcoded defaults.",
+      "acceptanceCriteria": [
+        "Remove nonisolated from currentPolicy() so it can access actor-isolated @Published properties",
+        "Replace four hardcoded values with perSessionCreditCap, perDayCreditCap, requestsPerMinute, requireOwnAPIKey",
+        "Update call sites that call currentPolicy() from non-isolated context to use await",
+        "currentPolicy() returns user's actual configured values not hardcoded defaults",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Wire OpenClaw notification into ChatViewModel",
+      "description": "As a developer using OpenClaw, I want session messages from the gateway to be routed through ChatViewModel's streaming pipeline so the OpenClaw flow actually works end-to-end.",
+      "acceptanceCriteria": [
+        "ChatViewModel subscribes to .openClawMessageReceived notification",
+        "When notification fires, extract sessionId, content, and optional model from userInfo",
+        "Create new conversation or append to active one then call existing streaming pipeline",
+        "After streaming completes call OpenClawService.shared.sendResponse(sessionId:content:done:) with final response",
+        "If streaming fails send error response back with done: true",
+        "Add separate handleOpenClawMessage method (do not restructure existing sendMessage flow)",
+        "Normal user-initiated chat is unaffected",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Depends on US-002 and US-003 being completed first"
+    },
+    {
+      "id": "US-005",
+      "title": "Track messageCount and creditsUsed on OpenClawSession",
+      "description": "As a user monitoring OpenClaw sessions, I want to see accurate message and credit counts instead of 0/0.",
+      "acceptanceCriteria": [
+        "In handleSessionMessage after cost control check passes, find session in activeSessions by sessionId and increment messageCount",
+        "Also increment creditsUsed by the credit amount passed to costControl.messageProcessed() (default 1.0)",
+        "Use firstIndex(where:) and mutate in place since OpenClawSession is a struct in an array",
+        "activeSessions mutation triggers @Published update for UI",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Depends on US-004 being completed first"
+    },
+    {
+      "id": "US-006",
+      "title": "Start MCPServerHost behind AppStorage toggle",
+      "description": "As a user, I want to enable the MCP server via a Settings toggle so that external MCP clients can connect to G-Rump.",
+      "acceptanceCriteria": [
+        "Add @AppStorage(\"EnableMCPServer\") private var enableMCPServer = false to GRumpApp",
+        "After splash dismissal in macOS section, start MCP server via Task if enableMCPServer is true",
+        "Add onChange(of: enableMCPServer) modifier to start/stop server at runtime",
+        "When EnableMCPServer is true and app launches MCPServerHost starts on port 18790",
+        "When toggle is flipped off MCPServerHost stops",
+        "Default is off, no server starts",
+        "App startup not blocked by MCP server init (uses Task)",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Implement 6 missing MCPToolDispatcher tools",
+      "description": "As an MCP client user, I want all 13 advertised tools to actually work instead of 6 returning errors.",
+      "acceptanceCriteria": [
+        "edit_file: reads file, finds old_text, replaces with new_text, writes back, errors if old_text not found",
+        "search_files: uses FileManager to enumerate directory and filter by pattern, returns matching paths",
+        "grep_search: uses Process to run /usr/bin/grep -rn with pattern and directory, returns output",
+        "web_search: returns clear 'Web search requires interactive mode' message not silent error",
+        "read_url: uses URLSession.shared.data(from:) with 10-second timeout, returns body text",
+        "clipboard_write: uses NSPasteboard.general.setString to write text, returns confirmation",
+        "No tool silently falls through to default error case",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Depends on US-006 being completed first"
+    },
+    {
+      "id": "US-008",
+      "title": "Add BillingView error alerts and loading spinner",
+      "description": "As a user viewing billing info, I want to see loading indicators and error messages instead of a blank page when the backend is unreachable.",
+      "acceptanceCriteria": [
+        "ProgressView overlay or inline indicator shows when isLoading is true",
+        "Alert or inline error banner shows when errorMessage is non-nil",
+        "In loadBillingData replace try? with do/catch setting errorMessage on failure",
+        "In openCheckout add error handling setting errorMessage if network call fails or no checkout URL",
+        "In openPortal add similar error handling",
+        "Retry button available in error state that calls loadBillingData again",
+        "Error messages can be dismissed",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Fix CI: print() scan recursion and SwiftLint blocking",
+      "description": "As a developer, I want CI to catch print statements in subdirectories and fail on lint errors instead of silently passing.",
+      "acceptanceCriteria": [
+        "print() check uses recursive search covering Sources/GRump/Views/ and other subdirectories",
+        "SwiftLint command no longer has || true so lint failures cause CI to fail",
+        "Keep outer if command -v check for SwiftLint availability",
+        "Story documents that backend/stripe.js must be tracked in git (do not execute git add)",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Add backend billing route tests",
+      "description": "As a developer, I want test coverage for billing routes and Stripe integration constants so regressions are caught.",
+      "acceptanceCriteria": [
+        "Add describe('Billing & Stripe') section to backend/tests/backend.test.js",
+        "Test getUsageAnalytics(userId): create user, insert usage_log rows, verify correct aggregates",
+        "Test CREDIT_PACKS has entries for credits_1000, credits_5000, credits_20000",
+        "Test PRICE_IDS contains all 6 price keys",
+        "Test TIER_MAP maps starter_monthly to starter, pro_monthly to pro, team_monthly to team",
+        "No tests require Stripe API key or network access",
+        "cd backend && npm test passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

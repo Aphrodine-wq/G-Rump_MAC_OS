@@ -25,7 +25,7 @@ struct ToolDefinitions {
         #endif
     }
 
-    static let allTools: [[String: Any]] = [
+    nonisolated(unsafe) static let allTools: [[String: Any]] = [
         // File operations
         readFile,
         batchReadFiles,
@@ -266,7 +266,7 @@ struct ToolDefinitions {
             toolCategoryMap[toolName] ?? .utilities
         }
 
-        static let toolCategoryMap: [String: ToolCategory] = [
+        nonisolated(unsafe) static let toolCategoryMap: [String: ToolCategory] = [
             "read_file": .file, "batch_read_files": .file, "write_file": .file, "edit_file": .file,
             "create_file": .file, "delete_file": .file, "move_file": .file, "copy_file": .file,
             "file_info": .file, "path_exists": .file, "count_lines": .file, "list_directory": .file,
@@ -325,7 +325,7 @@ struct ToolDefinitions {
     }
 
     /// Display info (name, SF Symbol icon) for all tools. Used in Settings UI.
-    static let toolDisplayInfo: [(name: String, icon: String)] = {
+    nonisolated(unsafe) static let toolDisplayInfo: [(name: String, icon: String)] = {
         let iconMap: [String: String] = [
             "read_file": "doc.text",
             "batch_read_files": "doc.on.doc",

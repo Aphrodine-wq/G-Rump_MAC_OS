@@ -1,6 +1,7 @@
 ---
 name: Test Generation
 description: Auto-generate test suites from existing code.
+tags: [testing, test-generation, automation, coverage, quality]
 ---
 
 # Test Generation Skill

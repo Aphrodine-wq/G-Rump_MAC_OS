@@ -90,6 +90,7 @@ struct ProfilingPanel: View {
     private func profileSwiftBuild() {
         guard !viewModel.workingDirectory.isEmpty else { return }
         isRecording = true
+        #if os(macOS)
         let dir = viewModel.workingDirectory
         Task.detached(priority: .userInitiated) {
             let start = CFAbsoluteTimeGetCurrent()
@@ -113,6 +114,9 @@ struct ProfilingPanel: View {
                 ))
             }
         }
+        #else
+        isRecording = false
+        #endif
     }
 
     // MARK: - Quick Profile

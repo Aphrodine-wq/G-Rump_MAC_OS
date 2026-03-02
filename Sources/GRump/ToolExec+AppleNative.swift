@@ -24,14 +24,13 @@ extension ChatViewModel {
         #if os(macOS)
         guard let query = args["query"] as? String else { return "Error: missing query" }
         let limit = args["limit"] as? Int ?? 20
-        var cmdArgs = ["mdfind"]
+        var processArgs: [String] = []
         if let directory = args["directory"] as? String {
             let resolved = resolvePath(directory)
-            cmdArgs.append(contentsOf: ["-onlyin", resolved])
+            processArgs.append(contentsOf: ["-onlyin", resolved])
         }
-        cmdArgs.append(query)
-        let cmd = cmdArgs.map { "'\($0.replacingOccurrences(of: "'", with: "'\\''"))'" }.joined(separator: " ")
-        let result = await runShellCommand("\(cmd) | head -\(limit)", cwd: nil, timeoutSeconds: 10)
+        processArgs.append(query)
+        let result = await runProcess(executablePath: "/usr/bin/mdfind", arguments: processArgs, cwd: nil, stdoutLimitLines: limit)
         return result.isEmpty ? "No results found for '\(query)'" : result
         #else
         return "Error: Spotlight search is only available on macOS"

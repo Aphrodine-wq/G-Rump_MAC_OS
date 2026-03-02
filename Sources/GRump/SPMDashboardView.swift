@@ -78,6 +78,7 @@ final class SPMService: ObservableObject {
     }
 
     func resolve() {
+        #if os(macOS)
         guard !workingDirectory.isEmpty else { return }
         isLoading = true
         let dir = workingDirectory
@@ -92,9 +93,11 @@ final class SPMService: ObservableObject {
             process.waitUntilExit()
             await self.refresh()
         }
+        #endif
     }
 
     func update() {
+        #if os(macOS)
         guard !workingDirectory.isEmpty else { return }
         isLoading = true
         let dir = workingDirectory
@@ -109,6 +112,7 @@ final class SPMService: ObservableObject {
             process.waitUntilExit()
             await self.refresh()
         }
+        #endif
     }
 
     nonisolated static func parseDependencies(dir: String) -> [SPMDependency] {
@@ -229,6 +233,7 @@ final class SPMService: ObservableObject {
     }
 
     nonisolated static func getSwiftVersion() -> String {
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
         process.arguments = ["--version"]
@@ -244,6 +249,9 @@ final class SPMService: ObservableObject {
             return String(output[range])
         }
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        #else
+        return ""
+        #endif
     }
 }
 

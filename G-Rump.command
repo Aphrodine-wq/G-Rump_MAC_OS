@@ -96,8 +96,17 @@ BUILD_TIME=$((END_TIME - START_TIME))
 echo ""
 echo "Build completed in ${BUILD_TIME}s"
 echo "Launching G-Rump..."
-exec swift run -c $BUILD_CONFIG --skip-build GRump \
-  --scratch-path "$BUILD_DIR" \
-  --cache-path "$BUILD_DIR/cache" \
-  --config-path "$BUILD_DIR/config" \
-  --security-path "$BUILD_DIR/security"
+
+# Verify the binary exists before using --skip-build
+BINARY_PATH="$BUILD_DIR/$BUILD_CONFIG/GRump"
+if [ -x "$BINARY_PATH" ]; then
+    exec "$BINARY_PATH"
+else
+    # Fallback: let swift run locate the binary
+    echo "Binary not found at expected path, using swift run..."
+    exec swift run -c $BUILD_CONFIG GRump \
+      --scratch-path "$BUILD_DIR" \
+      --cache-path "$BUILD_DIR/cache" \
+      --config-path "$BUILD_DIR/config" \
+      --security-path "$BUILD_DIR/security"
+fi

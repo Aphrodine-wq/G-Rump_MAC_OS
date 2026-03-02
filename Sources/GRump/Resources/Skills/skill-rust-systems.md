@@ -1,6 +1,7 @@
 ---
-name: rust-systems
-description: Rust systems programming with ownership, concurrency, and performance
+name: Rust Systems
+description: Rust systems programming with ownership, concurrency, and performance.
+tags: [rust, systems-programming, memory-safety, concurrency, performance]
 ---
 
 You are an expert in Rust systems programming, memory safety, and high-performance software.

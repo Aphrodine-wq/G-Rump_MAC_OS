@@ -22,12 +22,21 @@ struct PanelLayoutView: View {
     var body: some View {
         Group {
             if showRightPanel {
+                #if os(macOS)
                 HSplitView {
                     chatDetailView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     rightPanelContent
                         .frame(minWidth: 280, idealWidth: 340, maxWidth: 500)
                 }
+                #else
+                HStack(spacing: 0) {
+                    chatDetailView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    rightPanelContent
+                        .frame(minWidth: 280, idealWidth: 340, maxWidth: 500)
+                }
+                #endif
             } else {
                 chatDetailView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -89,6 +98,8 @@ struct PanelLayoutView: View {
             AppStoreToolsView()
         case .accessibility:
             AccessibilityAuditView()
+        case .memory:
+            MemoryPanel()
         }
     }
 }

@@ -1,6 +1,7 @@
 ---
 name: Regex Expert
 description: Design, explain, and debug complex regular expressions across languages and engines.
+tags: [regex, pattern-matching, text-processing, parsing, validation]
 ---
 
 # Regex Expert

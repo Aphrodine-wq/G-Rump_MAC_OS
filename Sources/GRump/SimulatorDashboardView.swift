@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - Simulator Device Model
 
@@ -59,12 +62,15 @@ struct SimulatorDevice: Identifiable, Hashable {
 final class SimulatorService: ObservableObject {
     @Published var devices: [SimulatorDevice] = []
     @Published var isLoading = false
+    #if os(macOS)
     @Published var lastScreenshot: NSImage?
+    #endif
     @Published var errorMessage: String?
 
     func refresh() {
         isLoading = true
         errorMessage = nil
+        #if os(macOS)
         Task.detached(priority: .userInitiated) {
             do {
                 let process = Process()
@@ -128,17 +134,26 @@ final class SimulatorService: ObservableObject {
                 }
             }
         }
+        #else
+        isLoading = false
+        errorMessage = "Simulators not available on this platform"
+        #endif
     }
 
     func boot(_ device: SimulatorDevice) {
+        #if os(macOS)
         runSimctl(["boot", device.id])
+        #endif
     }
 
     func shutdown(_ device: SimulatorDevice) {
+        #if os(macOS)
         runSimctl(["shutdown", device.id])
+        #endif
     }
 
     func screenshot(_ device: SimulatorDevice) {
+        #if os(macOS)
         Task.detached(priority: .userInitiated) {
             let tempPath = FileManager.default.temporaryDirectory
                 .appendingPathComponent("sim_screenshot_\(Int(Date().timeIntervalSince1970)).png").path
@@ -156,6 +171,7 @@ final class SimulatorService: ObservableObject {
                 }
             }
         }
+        #endif
     }
 
     func openSimulatorApp() {
@@ -166,6 +182,7 @@ final class SimulatorService: ObservableObject {
         #endif
     }
 
+    #if os(macOS)
     private func runSimctl(_ args: [String]) {
         Task.detached(priority: .userInitiated) {
             let process = Process()
@@ -179,6 +196,7 @@ final class SimulatorService: ObservableObject {
             await self.refresh()
         }
     }
+    #endif
 }
 
 // MARK: - Simulator Dashboard View
@@ -266,19 +284,18 @@ struct SimulatorDashboardView: View {
             }
 
             // Screenshot preview
+            #if os(macOS)
             if let screenshot = service.lastScreenshot {
                 Rectangle()
                     .fill(themeManager.palette.borderSubtle)
                     .frame(height: Border.thin)
 
                 HStack(spacing: Spacing.lg) {
-                    #if os(macOS)
                     Image(nsImage: screenshot)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(height: 80)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-                    #endif
 
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("Screenshot captured")
@@ -301,6 +318,7 @@ struct SimulatorDashboardView: View {
                 .padding(Spacing.lg)
                 .background(themeManager.palette.bgCard)
             }
+            #endif
         }
         .background(themeManager.palette.bgDark)
         .onAppear { service.refresh() }

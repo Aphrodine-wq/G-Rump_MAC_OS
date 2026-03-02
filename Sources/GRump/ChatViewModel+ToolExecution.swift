@@ -115,10 +115,12 @@ extension ChatViewModel {
             return await executeExtractArchive(args)
 
         case "run_command":
-            guard let command = args["command"] as? String else { return "Error: missing command" }
-            let cwd = (args["cwd"] as? String).map { resolvePath($0) } ?? (workingDirectory.isEmpty ? nil : workingDirectory)
-            let timeoutSeconds = args["timeout"] as? Int ?? 60
-            return await runShellCommand(command, cwd: cwd, timeoutSeconds: timeoutSeconds)
+            #if os(macOS)
+            // Route through exec approval pipeline (same as system_run)
+            return await executeSystemRun(args)
+            #else
+            return "run_command is only available on macOS."
+            #endif
 
         case "run_background":
             return await executeRunBackground(args)
@@ -442,11 +444,81 @@ extension ChatViewModel {
         case "bonjour_discover":
             return await executeBonjourDiscover(args)
 
+        // Docker & Kubernetes
+        case "docker_run":
+            return await executeDockerRun(args)
+        case "docker_build":
+            return await executeDockerBuild(args)
+        case "docker_logs":
+            return await executeDockerLogs(args)
+        case "docker_compose_up":
+            return await executeDockerComposeUp(args)
+        case "docker_compose_down":
+            return await executeDockerComposeDown(args)
+        case "kubectl_get":
+            return await executeKubectlGet(args)
+        case "kubectl_apply":
+            return await executeKubectlApply(args)
+
+        // Browser automation
+        case "browser_open":
+            return await executeBrowserOpen(args)
+        case "browser_screenshot":
+            return await executeBrowserScreenshot(args)
+        case "browser_evaluate":
+            return await executeBrowserEvaluate(args)
+
+        // AI & Embeddings
+        case "generate_embeddings":
+            return await executeGenerateEmbeddings(args)
+        case "semantic_search":
+            return await executeSemanticSearchTool(args)
+        case "summarize_text":
+            return await executeSummarizeText(args)
+
+        // Cloud Deploy
+        case "vercel_deploy":
+            return await executeVercelDeploy(args)
+        case "vercel_logs":
+            return await executeVercelLogs(args)
+        case "netlify_deploy":
+            return await executeNetlifyDeploy(args)
+        case "fly_deploy":
+            return await executeFlyDeploy(args)
+
+        // Code Analysis
+        case "regex_replace":
+            return await executeRegexReplace(args)
+        case "ast_parse":
+            return await executeAstParse(args)
+        case "find_references":
+            return await executeFindReferences(args)
+        case "type_check":
+            return await executeTypeCheck(args)
+        case "dependency_graph":
+            return await executeDependencyGraph(args)
+        case "code_complexity":
+            return await executeCodeComplexity(args)
+
+        // Network / Validation
+        case "port_scan":
+            return await executePortScan(args)
+        case "ssl_check":
+            return await executeSslCheck(args)
+        case "cron_parse":
+            return await executeCronParse(args)
+        case "json_schema_validate":
+            return await executeJsonSchemaValidate(args)
+
+        // Interactive
+        case "ask_user":
+            return await executeAskUser(args)
+
         default:
             if name.hasPrefix("mcp_") {
                 return await executeMCPToolCall(name: name, arguments: args)
             }
-            return "Tool '\(name)' is not recognized. Available tools: read_file, batch_read_files, write_file, edit_file, create_file, delete_file, move_file, copy_file, file_info, path_exists, count_lines, list_directory, tree_view, search_files, grep_search, find_and_replace, run_command, system_run, system_notify, get_env, list_processes, disk_usage, clipboard_read, clipboard_write, open_url, open_app, screen_snapshot, screen_record, camera_snap, window_list, window_snapshot, web_search, read_url, view_code_outline, run_build, run_linter, run_tests, git_status, git_log, git_diff, git_branch, git_show"
+            return "Tool '\(name)' is not recognized. Use list_directory, read_file, edit_file, grep_search, run_command, web_search, or other available tools."
         }
     }
 

@@ -27,6 +27,10 @@ Package.resolved
 node_modules/
 backend/node_modules/
 
+# Removed reference repos
+openclaw-main/
+awesome-claude-skills-master/
+
 # Misc
 *.swp
 *~

@@ -31,7 +31,9 @@ struct ChatTopBarView: View {
                 .font(Typography.bodySemibold)
                 .textFieldStyle(.plain)
                 .frame(maxWidth: 300)
+                #if os(macOS)
                 .onExitCommand { isEditingTitle = false }
+                #endif
             } else {
                 Text(viewModel.currentConversation?.title ?? "New Chat")
                     .font(Typography.bodySemibold)
@@ -135,6 +137,7 @@ struct ChatTopBarView: View {
             }
 
             modelPickerMenu
+            modelModePicker
         }
         .padding(.horizontal, Spacing.massive)
         .padding(.vertical, Spacing.xxl)
@@ -320,6 +323,42 @@ struct ChatTopBarView: View {
         .clipShape(Capsule())
         .overlay(Capsule().stroke(themeManager.palette.borderCrisp, lineWidth: Border.thin))
     }
+
+    // MARK: - Model Mode Picker
+
+    @ViewBuilder
+    private var modelModePicker: some View {
+        if let model = viewModel.currentEnhancedModel, model.hasModes {
+            HStack(spacing: 2) {
+                ForEach(model.modes) { mode in
+                    Button {
+                        viewModel.selectedModelMode = mode
+                    } label: {
+                        Text(mode.displayName)
+                            .font(Typography.micro)
+                            .foregroundColor(
+                                viewModel.selectedModelMode?.id == mode.id
+                                    ? .white
+                                    : .textMuted
+                            )
+                            .padding(.horizontal, Spacing.lg)
+                            .padding(.vertical, 4)
+                            .background(
+                                viewModel.selectedModelMode?.id == mode.id
+                                    ? themeManager.palette.effectiveAccent
+                                    : Color.clear
+                            )
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(2)
+            .background(themeManager.palette.bgInput)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(themeManager.palette.borderSubtle, lineWidth: Border.hairline))
+        }
+    }
 }
 
 // MARK: - Connection Status Dot
@@ -327,17 +366,27 @@ struct ChatTopBarView: View {
 struct ConnectionStatusDot: View {
     @EnvironmentObject var themeManager: ThemeManager
     @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject private var connectionMonitor = ConnectionMonitor.shared
 
     private var statusColor: Color {
+        if !connectionMonitor.isConnected { return .red }
+        if case .degraded = connectionMonitor.status { return .orange }
         if viewModel.isLoading { return .orange }
         if viewModel.errorMessage != nil { return .red }
         return .accentGreen
     }
 
     private var statusLabel: String {
+        if !connectionMonitor.isConnected { return "Offline" }
+        if case .degraded(let reason) = connectionMonitor.status { return "Degraded: \(reason)" }
         if viewModel.isLoading { return "Active" }
         if viewModel.errorMessage != nil { return "Error" }
         return "Connected"
+    }
+
+    private var latencyText: String? {
+        guard let latency = connectionMonitor.lastLatency else { return nil }
+        return "\(Int(latency * 1000))ms"
     }
 
     var body: some View {
@@ -348,7 +397,13 @@ struct ConnectionStatusDot: View {
             Text(statusLabel)
                 .font(Typography.micro)
                 .foregroundColor(themeManager.palette.textMuted)
+            if let latency = latencyText, connectionMonitor.isConnected {
+                Text(latency)
+                    .font(Typography.micro)
+                    .foregroundColor(themeManager.palette.textMuted.opacity(0.7))
+            }
         }
         .help("Connection status: \(statusLabel)")
+        .onAppear { connectionMonitor.start() }
     }
 }

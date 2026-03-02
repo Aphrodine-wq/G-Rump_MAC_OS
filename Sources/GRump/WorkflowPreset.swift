@@ -51,7 +51,7 @@ enum WorkflowPresetsStorage {
             ),
             WorkflowPreset(
                 name: "Debug assistant",
-                modelRawValue: AIModel.gemini25Flash.rawValue,
+                modelRawValue: AIModel.gemini31Flash.rawValue,
                 systemPrompt: GRumpDefaults.defaultSystemPrompt + "\n\nFocus on debugging: analyze error messages, trace execution, and propose minimal fixes. Use run_command to reproduce and verify."
             ),
             WorkflowPreset(

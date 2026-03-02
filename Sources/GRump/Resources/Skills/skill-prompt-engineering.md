@@ -1,6 +1,7 @@
 ---
 name: Prompt Engineering
 description: Design effective prompts, system messages, and tool descriptions for LLM-powered applications.
+tags: [prompt-engineering, llm, ai, system-prompts, tool-use]
 ---
 
 # Prompt Engineering

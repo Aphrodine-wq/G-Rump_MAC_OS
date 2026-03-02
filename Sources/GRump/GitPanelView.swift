@@ -89,7 +89,7 @@ final class GitService: ObservableObject {
         guard !workingDirectory.isEmpty else { return }
         isLoading = true
         let dir = workingDirectory
-        Task.detached(priority: .userInitiated) {
+        Task {
             async let changesResult = Self.parseStatus(dir: dir)
             async let branchResult = Self.parseBranches(dir: dir)
             async let logResult = Self.parseLog(dir: dir)
@@ -98,13 +98,11 @@ final class GitService: ObservableObject {
             let (branches, current) = await branchResult
             let log = await logResult
 
-            await MainActor.run {
-                self.changes = changes
-                self.branches = branches
-                self.currentBranch = current
-                self.commitLog = log
-                self.isLoading = false
-            }
+            self.changes = changes
+            self.branches = branches
+            self.currentBranch = current
+            self.commitLog = log
+            self.isLoading = false
         }
     }
 
@@ -142,23 +140,18 @@ final class GitService: ObservableObject {
     }
 
     private func runGit(_ args: [String]) {
+        #if os(macOS)
         let dir = workingDirectory
-        Task.detached(priority: .userInitiated) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = args
-            process.currentDirectoryURL = URL(fileURLWithPath: dir)
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            try? process.run()
-            process.waitUntilExit()
-            try? await Task.sleep(for: .milliseconds(500))
-            await self.refresh()
+        Task {
+            _ = await Self.runGitAsync(args, dir: dir)
+            try? await Task.sleep(for: .milliseconds(300))
+            self.refresh()
         }
+        #endif
     }
 
-    private static func parseStatus(dir: String) -> [GitChange] {
-        guard let output = runGitSync(["status", "--porcelain=v1"], dir: dir) else { return [] }
+    private static func parseStatus(dir: String) async -> [GitChange] {
+        guard let output = await runGitAsync(["status", "--porcelain=v1"], dir: dir) else { return [] }
         return output.split(separator: "\n").compactMap { line in
             let str = String(line)
             guard str.count >= 4 else { return nil }
@@ -196,8 +189,8 @@ final class GitService: ObservableObject {
         }
     }
 
-    private static func parseBranches(dir: String) -> ([GitBranchInfo], String) {
-        guard let output = runGitSync(["branch", "-a", "--no-color"], dir: dir) else { return ([], "") }
+    private static func parseBranches(dir: String) async -> ([GitBranchInfo], String) {
+        guard let output = await runGitAsync(["branch", "-a", "--no-color"], dir: dir) else { return ([], "") }
         var branches: [GitBranchInfo] = []
         var current = ""
         for line in output.split(separator: "\n") {
@@ -212,8 +205,8 @@ final class GitService: ObservableObject {
         return (branches, current)
     }
 
-    private static func parseLog(dir: String) -> [GitCommitInfo] {
-        guard let output = runGitSync(["log", "--oneline", "-20", "--no-color"], dir: dir) else { return [] }
+    private static func parseLog(dir: String) async -> [GitCommitInfo] {
+        guard let output = await runGitAsync(["log", "--oneline", "-20", "--no-color"], dir: dir) else { return [] }
         return output.split(separator: "\n").map { line in
             let str = String(line)
             let parts = str.split(separator: " ", maxSplits: 1)
@@ -223,18 +216,30 @@ final class GitService: ObservableObject {
         }
     }
 
-    private static func runGitSync(_ args: [String], dir: String) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = URL(fileURLWithPath: dir)
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        try? process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return String(data: data, encoding: .utf8)
+    private static func runGitAsync(_ args: [String], dir: String) async -> String? {
+        #if os(macOS)
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                process.arguments = args
+                process.currentDirectoryURL = URL(fileURLWithPath: dir)
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    process.waitUntilExit()
+                    continuation.resume(returning: String(data: data, encoding: .utf8))
+                } catch {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+        #else
+        return nil
+        #endif
     }
 }
 

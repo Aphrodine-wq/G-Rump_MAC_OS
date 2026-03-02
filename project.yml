@@ -11,7 +11,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "2.0.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_STRICT_CONCURRENCY: targeted
     CODE_SIGN_STYLE: Automatic
@@ -35,6 +35,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: GRump.entitlements
         SWIFT_ACTIVE_COMPILATION_CONDITIONS:
           - GRUMP_XCODE_BUILD
+          - GRUMP_SPM_BUILD
         LD_RUNPATH_SEARCH_PATHS:
           - "@executable_path/../Frameworks"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -62,6 +63,7 @@ targets:
         INFOPLIST_FILE: Sources/GRump/Info.plist
         SWIFT_ACTIVE_COMPILATION_CONDITIONS:
           - GRUMP_XCODE_BUILD
+          - GRUMP_SPM_BUILD
         TARGETED_DEVICE_FAMILY: "1,2"
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES

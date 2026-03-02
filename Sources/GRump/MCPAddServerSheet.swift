@@ -158,6 +158,9 @@ struct MCPEditServerSheet: View {
             case .http(let url):
                 transportType = "http"
                 httpUrl = url
+            case .websocket(let url):
+                transportType = "http"
+                httpUrl = url
             }
         }
         .environmentObject(themeManager)

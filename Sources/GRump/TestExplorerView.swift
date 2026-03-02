@@ -215,6 +215,7 @@ final class TestService: ObservableObject {
     }
 
     nonisolated private static func runSwiftTest(dir: String, filter: String?) -> (String, Bool) {
+        #if os(macOS)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
         var args = ["test"]
@@ -233,6 +234,9 @@ final class TestService: ObservableObject {
         process.waitUntilExit()
         let output = (String(data: data, encoding: .utf8) ?? "") + (String(data: errData, encoding: .utf8) ?? "")
         return (output, process.terminationStatus == 0)
+        #else
+        return ("Running tests is not available on iOS", false)
+        #endif
     }
 
     nonisolated private static func parseTestResults(_ output: String) -> [String: TestMethod.TestStatus] {

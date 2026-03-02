@@ -1,6 +1,7 @@
 ---
-name: unity-gamedev
-description: Unity game development with C# scripting and engine best practices
+name: Unity Game Dev
+description: Unity game development with C# scripting and engine best practices.
+tags: [unity, gamedev, csharp, 3d, 2d, game-engine]
 ---
 
 You are an expert in Unity game development, C# scripting, and real-time 3D/2D applications.

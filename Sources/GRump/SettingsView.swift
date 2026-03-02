@@ -9,6 +9,7 @@ import UIKit
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case account
+    case billing
     case providers
     case presets
     case behavior
@@ -18,6 +19,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case appearance
     case tools
     case mcp
+    case openClaw
     case skills
     case soul
     #if os(macOS)
@@ -37,16 +39,16 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// Each category is (icon, label, tabs). If tabs has only 1 item, it shows directly; otherwise drill-down.
     static var categories: [(icon: String, label: String, tabs: [SettingsTab])] {
         var list: [(icon: String, label: String, tabs: [SettingsTab])] = [
-            ("person.crop.circle.fill", "Account", [.account]),
+            ("person.crop.circle.fill", "Account", [.account, .billing]),
             ("cpu", "AI", [.providers, .presets, .behavior, .streaming, .advanced]),
-            ("folder.fill", "Workspace", [.project, .tools, .mcp, .skills, .soul]),
+            ("folder.fill", "Workspace", [.project, .tools, .mcp, .openClaw, .skills, .soul]),
             ("paintbrush.fill", "Appearance", [.appearance]),
             ("gearshape", "General", [.notifications, .shortcuts, .updates, .data, .memory, .privacy]),
             ("info.circle.fill", "About", [.about])
         ]
         #if os(macOS)
         if let idx = list.firstIndex(where: { $0.label == "Workspace" }) {
-            list[idx] = ("folder.fill", "Workspace", [.project, .tools, .mcp, .skills, .soul, .security])
+            list[idx] = ("folder.fill", "Workspace", [.project, .tools, .mcp, .openClaw, .skills, .soul, .security])
         }
         #endif
         return list
@@ -60,6 +62,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .account: return "Account"
+        case .billing: return "Billing"
         case .appearance: return "Appearance"
         case .providers: return "Providers"
         case .presets: return "Workflow Presets"
@@ -72,6 +75,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .updates: return "Updates"
         case .tools: return "Tools"
         case .mcp: return "MCP Servers"
+        case .openClaw: return "OpenClaw"
         case .skills: return "Skills"
         case .soul: return "Soul"
         case .data: return "Data"
@@ -87,6 +91,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .account: return "key.fill"
+        case .billing: return "creditcard.fill"
         case .appearance: return "paintbrush.fill"
         case .providers: return "cpu"
         case .presets: return "square.stack.3d.up.fill"
@@ -99,6 +104,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .updates: return "arrow.down.circle.fill"
         case .tools: return "wrench.and.screwdriver.fill"
         case .mcp: return "cylinder.split.1x2.fill"
+        case .openClaw: return "antenna.radiowaves.left.and.right"
         case .skills: return "brain.head.profile"
         case .soul: return "person.text.rectangle.fill"
         case .data: return "square.and.arrow.up"
@@ -114,7 +120,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// Top-level tab groups for horizontal tab bar. (Label, tabs in group)
     static var tabGroups: [(String, [SettingsTab])] {
         var list: [(String, [SettingsTab])] = [
-            ("Account", [.account]),
+            ("Account", [.account, .billing]),
             ("AI & Providers", [.providers, .presets, .behavior, .streaming]),
             ("Advanced", [.advanced]),
             ("Workspace", [.project]),
@@ -125,11 +131,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         ]
         #if os(macOS)
         if let idx = list.firstIndex(where: { $0.0 == "Tools" }) {
-            list[idx] = ("Tools & Security", [.tools, .mcp, .skills, .soul, .security])
+            list[idx] = ("Tools & Security", [.tools, .mcp, .openClaw, .skills, .soul, .security])
         }
         #else
         if let idx = list.firstIndex(where: { $0.0 == "Tools" }) {
-            list[idx] = ("Tools", [.tools, .mcp, .skills, .soul])
+            list[idx] = ("Tools", [.tools, .mcp, .openClaw, .skills, .soul])
         }
         #endif
         return list
@@ -261,6 +267,8 @@ struct SettingsView: View {
     @State var workflowPresets: [WorkflowPreset] = []
 
     var body: some View {
+        Group {
+        #if os(macOS)
         NavigationSplitView {
             List(selection: $selectedTab) {
                 ForEach(SettingsTab.categories, id: \.label) { category in
@@ -304,6 +312,41 @@ struct SettingsView: View {
             .background(themeManager.palette.bgDark)
             .navigationTitle(selectedTab.label)
         }
+        #else
+        NavigationStack {
+            List {
+                ForEach(SettingsTab.categories, id: \.label) { category in
+                    if category.tabs.count == 1 {
+                        NavigationLink {
+                            ScrollView {
+                                tabContent(category.tabs[0])
+                                    .padding(Spacing.huge)
+                            }
+                            .navigationTitle(category.tabs[0].label)
+                        } label: {
+                            Label(category.label, systemImage: category.icon)
+                        }
+                    } else {
+                        Section(category.label) {
+                            ForEach(category.tabs, id: \.self) { tab in
+                                NavigationLink {
+                                    ScrollView {
+                                        tabContent(tab)
+                                            .padding(Spacing.huge)
+                                    }
+                                    .navigationTitle(tab.label)
+                                } label: {
+                                    Label(tab.label, systemImage: tab.icon)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+        }
+        #endif
+        }
         .overlay(alignment: .topTrailing) {
             Button {
                 dismiss()
@@ -336,11 +379,20 @@ struct SettingsView: View {
         mcpTestingServerIDs.insert(server.id)
         defer { mcpTestingServerIDs.remove(server.id) }
 
-        let tools = await MCPService.fetchTools(serverId: server.id, transport: server.transport)
+        let mgr = MCPConnectionManager.shared
+        let tools = await mgr.fetchTools(config: server)
         if tools.isEmpty {
             mcpServerTestMessages[server.id] = "No tools detected. Check command path, env vars/API keys, then test again."
         } else {
-            mcpServerTestMessages[server.id] = "OK: \(tools.count) tool\(tools.count == 1 ? "" : "s") loaded."
+            // Try to get resource and prompt counts too
+            var parts = ["OK: \(tools.count) tool\(tools.count == 1 ? "" : "s")"]
+            if let resources = try? await mgr.listResources(config: server), !resources.isEmpty {
+                parts.append("\(resources.count) resource\(resources.count == 1 ? "" : "s")")
+            }
+            if let prompts = try? await mgr.listPrompts(config: server), !prompts.isEmpty {
+                parts.append("\(prompts.count) prompt\(prompts.count == 1 ? "" : "s")")
+            }
+            mcpServerTestMessages[server.id] = parts.joined(separator: ", ") + "."
         }
     }
 
@@ -391,6 +443,8 @@ struct SettingsView: View {
             switch tab {
             case .account:
                 accountSection
+            case .billing:
+                BillingView()
             case .appearance:
                 appearanceSection
             case .providers:
@@ -415,6 +469,8 @@ struct SettingsView: View {
                 toolsSection
             case .mcp:
                 mcpSection
+            case .openClaw:
+                OpenClawSettingsView()
             case .skills:
                 skillsSettingsSection
             case .soul:

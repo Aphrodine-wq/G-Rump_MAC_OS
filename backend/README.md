@@ -7,7 +7,7 @@ Locked-down commercial backend: one OpenRouter API key, **Google Sign-In only** 
 - **No passwords stored** — Google OAuth only. Users sign in with Google; we store Google ID and email (from Google) for display.
 - **JWT**: In production, `JWT_SECRET` must be set and at least 32 characters.
 - **Rate limits**: Auth 30 requests / 15 min; API 120 / min.
-- **CORS**: Set `CORS_ORIGIN` for web; omit for native app only.
+- **CORS**: Set `CORS_ORIGIN` to `https://www.g-rump.com,https://g-rump.com` in production.
 
 ## Setup
 
@@ -26,22 +26,40 @@ npm install
 npm start
 ```
 
-Runs on `http://localhost:3042` by default. For production, deploy and set `NODE_ENV=production`.
+Runs on `http://localhost:3042` by default. For production, deploy behind `api.g-rump.com` and set `NODE_ENV=production`.
 
 ## API
 
-- **POST /api/auth/signup** — `{ "email", "password" }` → `{ token, user }`
-- **POST /api/auth/login** — `{ "email", "password" }` → `{ token, user }`
+### Auth
+- **POST /api/auth/google** — `{ "idToken" }` → `{ token, user, isNew }`
+
+### User
 - **GET /api/me** — `Authorization: Bearer <token>` → `{ id, email, tier, creditsBalance, creditsPerMonth, ... }`
+- **PATCH /api/me** — `{ displayName?, avatarUrl? }` → updated user
+- **GET /api/me/usage** — usage analytics (by model, daily, monthly)
+- **GET /api/me/export** — GDPR data export
+- **DELETE /api/me** — delete account and all data
+
+### Billing (Stripe)
+- **POST /api/billing/checkout** — `{ priceKey, successUrl?, cancelUrl? }` → `{ url, sessionId }`
+- **POST /api/billing/portal** — `{ returnUrl? }` → `{ url }`
+- **POST /api/billing/credit-pack** — `{ packKey, successUrl?, cancelUrl? }` → `{ url, sessionId }`
+- **GET /api/billing/usage** — billing analytics with tier info
+- **POST /api/billing/webhook** — Stripe webhook handler
+
+Stripe checkout and portal redirect to `www.g-rump.com` by default (configurable via `APP_URL`).
+
+### Chat Proxy
 - **POST /api/v1/chat/completions** — Same body as OpenRouter; requires auth. Proxies to OpenRouter, deducts credits from usage.
 
 ## Tiers (edit in `db.js`)
 
-| Tier  | Credits/month | Models        |
-|-------|----------------|---------------|
-| Free  | 500            | free-tier     |
-| Pro   | 5,000          | free, fast, frontier |
-| Team  | 25,000         | free, fast, frontier |
+| Tier    | Credits/month | Models               | Price     |
+|---------|---------------|----------------------|-----------|
+| Free    | 500           | free-tier            | $0        |
+| Starter | 2,000         | free, fast           | $9.99/mo  |
+| Pro     | 5,000         | free, fast, frontier | $19.99/mo |
+| Team    | 25,000        | free, fast, frontier | $49.99/mo |
 
 Credits are deducted per request (1 credit per 1K tokens by default; see `CREDITS_PER_1K_TOKENS` in `db.js`).
 

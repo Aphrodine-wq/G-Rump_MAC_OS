@@ -7,7 +7,7 @@ extension ToolDefinitions {
 
     // MARK: - Web
 
-    static let webSearch: [String: Any] = [
+    nonisolated(unsafe) static let webSearch: [String: Any] = [
         "type": "function",
         "function": [
             "name": "web_search",
@@ -25,7 +25,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let readURL: [String: Any] = [
+    nonisolated(unsafe) static let readURL: [String: Any] = [
         "type": "function",
         "function": [
             "name": "read_url",
@@ -43,7 +43,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let fetchJson: [String: Any] = [
+    nonisolated(unsafe) static let fetchJson: [String: Any] = [
         "type": "function",
         "function": [
             "name": "fetch_json",
@@ -58,7 +58,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let downloadFile: [String: Any] = [
+    nonisolated(unsafe) static let downloadFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "download_file",
@@ -76,7 +76,7 @@ extension ToolDefinitions {
 
     // MARK: - Code Intelligence & Build
 
-    static let runBuild: [String: Any] = [
+    nonisolated(unsafe) static let runBuild: [String: Any] = [
         "type": "function",
         "function": [
             "name": "run_build",
@@ -91,7 +91,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let runLinter: [String: Any] = [
+    nonisolated(unsafe) static let runLinter: [String: Any] = [
         "type": "function",
         "function": [
             "name": "run_linter",
@@ -107,7 +107,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let runFormat: [String: Any] = [
+    nonisolated(unsafe) static let runFormat: [String: Any] = [
         "type": "function",
         "function": [
             "name": "run_format",
@@ -123,7 +123,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let getPackageDeps: [String: Any] = [
+    nonisolated(unsafe) static let getPackageDeps: [String: Any] = [
         "type": "function",
         "function": [
             "name": "get_package_deps",
@@ -138,7 +138,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let npmInstall: [String: Any] = [
+    nonisolated(unsafe) static let npmInstall: [String: Any] = [
         "type": "function",
         "function": [
             "name": "npm_install",
@@ -154,7 +154,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let pipInstall: [String: Any] = [
+    nonisolated(unsafe) static let pipInstall: [String: Any] = [
         "type": "function",
         "function": [
             "name": "pip_install",
@@ -169,7 +169,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let cargoAdd: [String: Any] = [
+    nonisolated(unsafe) static let cargoAdd: [String: Any] = [
         "type": "function",
         "function": [
             "name": "cargo_add",
@@ -185,7 +185,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let viewCodeOutline: [String: Any] = [
+    nonisolated(unsafe) static let viewCodeOutline: [String: Any] = [
         "type": "function",
         "function": [
             "name": "view_code_outline",
@@ -205,7 +205,7 @@ extension ToolDefinitions {
 
     // MARK: - Git & Tests
 
-    static let gitStatus: [String: Any] = [
+    nonisolated(unsafe) static let gitStatus: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_status",
@@ -223,7 +223,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let runTests: [String: Any] = [
+    nonisolated(unsafe) static let runTests: [String: Any] = [
         "type": "function",
         "function": [
             "name": "run_tests",
@@ -243,7 +243,7 @@ extension ToolDefinitions {
 
     // MARK: - Git (extended)
 
-    static let gitLog: [String: Any] = [
+    nonisolated(unsafe) static let gitLog: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_log",
@@ -260,7 +260,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitDiff: [String: Any] = [
+    nonisolated(unsafe) static let gitDiff: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_diff",
@@ -277,7 +277,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitBranch: [String: Any] = [
+    nonisolated(unsafe) static let gitBranch: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_branch",
@@ -292,7 +292,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitShow: [String: Any] = [
+    nonisolated(unsafe) static let gitShow: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_show",
@@ -308,7 +308,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitAdd: [String: Any] = [
+    nonisolated(unsafe) static let gitAdd: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_add",
@@ -323,7 +323,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitCommit: [String: Any] = [
+    nonisolated(unsafe) static let gitCommit: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_commit",
@@ -338,7 +338,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitStash: [String: Any] = [
+    nonisolated(unsafe) static let gitStash: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_stash",
@@ -354,7 +354,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitCheckout: [String: Any] = [
+    nonisolated(unsafe) static let gitCheckout: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_checkout",
@@ -370,7 +370,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitPush: [String: Any] = [
+    nonisolated(unsafe) static let gitPush: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_push",
@@ -386,7 +386,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitPull: [String: Any] = [
+    nonisolated(unsafe) static let gitPull: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_pull",
@@ -401,7 +401,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitRemote: [String: Any] = [
+    nonisolated(unsafe) static let gitRemote: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_remote",
@@ -416,7 +416,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitTag: [String: Any] = [
+    nonisolated(unsafe) static let gitTag: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_tag",
@@ -431,7 +431,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let gitReset: [String: Any] = [
+    nonisolated(unsafe) static let gitReset: [String: Any] = [
         "type": "function",
         "function": [
             "name": "git_reset",
@@ -449,7 +449,7 @@ extension ToolDefinitions {
 
     // MARK: - Database
 
-    static let sqliteQuery: [String: Any] = [
+    nonisolated(unsafe) static let sqliteQuery: [String: Any] = [
         "type": "function",
         "function": [
             "name": "sqlite_query",
@@ -465,7 +465,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let sqliteSchema: [String: Any] = [
+    nonisolated(unsafe) static let sqliteSchema: [String: Any] = [
         "type": "function",
         "function": [
             "name": "sqlite_schema",
@@ -481,7 +481,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let sqliteTables: [String: Any] = [
+    nonisolated(unsafe) static let sqliteTables: [String: Any] = [
         "type": "function",
         "function": [
             "name": "sqlite_tables",
@@ -498,7 +498,7 @@ extension ToolDefinitions {
 
     // MARK: - Image
 
-    static let imageInfo: [String: Any] = [
+    nonisolated(unsafe) static let imageInfo: [String: Any] = [
         "type": "function",
         "function": [
             "name": "image_info",
@@ -513,7 +513,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let imageResize: [String: Any] = [
+    nonisolated(unsafe) static let imageResize: [String: Any] = [
         "type": "function",
         "function": [
             "name": "image_resize",
@@ -533,7 +533,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let imageConvert: [String: Any] = [
+    nonisolated(unsafe) static let imageConvert: [String: Any] = [
         "type": "function",
         "function": [
             "name": "image_convert",
@@ -552,7 +552,7 @@ extension ToolDefinitions {
 
     // MARK: - API & DevOps
 
-    static let httpRequest: [String: Any] = [
+    nonisolated(unsafe) static let httpRequest: [String: Any] = [
         "type": "function",
         "function": [
             "name": "http_request",
@@ -570,7 +570,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let readEnvFile: [String: Any] = [
+    nonisolated(unsafe) static let readEnvFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "read_env_file",
@@ -585,7 +585,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let writeEnvFile: [String: Any] = [
+    nonisolated(unsafe) static let writeEnvFile: [String: Any] = [
         "type": "function",
         "function": [
             "name": "write_env_file",
@@ -601,7 +601,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dockerPs: [String: Any] = [
+    nonisolated(unsafe) static let dockerPs: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_ps",
@@ -616,7 +616,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dockerImages: [String: Any] = [
+    nonisolated(unsafe) static let dockerImages: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_images",
@@ -631,7 +631,7 @@ extension ToolDefinitions {
 
     // MARK: - Docker & Kubernetes
 
-    static let dockerRun: [String: Any] = [
+    nonisolated(unsafe) static let dockerRun: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_run",
@@ -651,7 +651,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dockerBuild: [String: Any] = [
+    nonisolated(unsafe) static let dockerBuild: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_build",
@@ -668,7 +668,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dockerLogs: [String: Any] = [
+    nonisolated(unsafe) static let dockerLogs: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_logs",
@@ -685,7 +685,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dockerComposeUp: [String: Any] = [
+    nonisolated(unsafe) static let dockerComposeUp: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_compose_up",
@@ -702,7 +702,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dockerComposeDown: [String: Any] = [
+    nonisolated(unsafe) static let dockerComposeDown: [String: Any] = [
         "type": "function",
         "function": [
             "name": "docker_compose_down",
@@ -718,7 +718,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let kubectlGet: [String: Any] = [
+    nonisolated(unsafe) static let kubectlGet: [String: Any] = [
         "type": "function",
         "function": [
             "name": "kubectl_get",
@@ -736,7 +736,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let kubectlApply: [String: Any] = [
+    nonisolated(unsafe) static let kubectlApply: [String: Any] = [
         "type": "function",
         "function": [
             "name": "kubectl_apply",
@@ -755,7 +755,7 @@ extension ToolDefinitions {
 
     // MARK: - Browser Automation
 
-    static let browserOpen: [String: Any] = [
+    nonisolated(unsafe) static let browserOpen: [String: Any] = [
         "type": "function",
         "function": [
             "name": "browser_open",
@@ -770,7 +770,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let browserScreenshot: [String: Any] = [
+    nonisolated(unsafe) static let browserScreenshot: [String: Any] = [
         "type": "function",
         "function": [
             "name": "browser_screenshot",
@@ -788,7 +788,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let browserEvaluate: [String: Any] = [
+    nonisolated(unsafe) static let browserEvaluate: [String: Any] = [
         "type": "function",
         "function": [
             "name": "browser_evaluate",
@@ -807,7 +807,7 @@ extension ToolDefinitions {
 
     // MARK: - AI & Embeddings
 
-    static let generateEmbeddings: [String: Any] = [
+    nonisolated(unsafe) static let generateEmbeddings: [String: Any] = [
         "type": "function",
         "function": [
             "name": "generate_embeddings",
@@ -823,7 +823,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let semanticSearch: [String: Any] = [
+    nonisolated(unsafe) static let semanticSearch: [String: Any] = [
         "type": "function",
         "function": [
             "name": "semantic_search",
@@ -841,7 +841,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let summarizeText: [String: Any] = [
+    nonisolated(unsafe) static let summarizeText: [String: Any] = [
         "type": "function",
         "function": [
             "name": "summarize_text",
@@ -860,7 +860,7 @@ extension ToolDefinitions {
 
     // MARK: - Cloud Deployment
 
-    static let vercelDeploy: [String: Any] = [
+    nonisolated(unsafe) static let vercelDeploy: [String: Any] = [
         "type": "function",
         "function": [
             "name": "vercel_deploy",
@@ -877,7 +877,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let vercelLogs: [String: Any] = [
+    nonisolated(unsafe) static let vercelLogs: [String: Any] = [
         "type": "function",
         "function": [
             "name": "vercel_logs",
@@ -893,7 +893,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let netlifyDeploy: [String: Any] = [
+    nonisolated(unsafe) static let netlifyDeploy: [String: Any] = [
         "type": "function",
         "function": [
             "name": "netlify_deploy",
@@ -910,7 +910,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let flyDeploy: [String: Any] = [
+    nonisolated(unsafe) static let flyDeploy: [String: Any] = [
         "type": "function",
         "function": [
             "name": "fly_deploy",
@@ -929,7 +929,7 @@ extension ToolDefinitions {
 
     // MARK: - Code Intelligence
 
-    static let astParse: [String: Any] = [
+    nonisolated(unsafe) static let astParse: [String: Any] = [
         "type": "function",
         "function": [
             "name": "ast_parse",
@@ -946,7 +946,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let findReferences: [String: Any] = [
+    nonisolated(unsafe) static let findReferences: [String: Any] = [
         "type": "function",
         "function": [
             "name": "find_references",
@@ -964,7 +964,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let typeCheck: [String: Any] = [
+    nonisolated(unsafe) static let typeCheck: [String: Any] = [
         "type": "function",
         "function": [
             "name": "type_check",
@@ -981,7 +981,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let dependencyGraph: [String: Any] = [
+    nonisolated(unsafe) static let dependencyGraph: [String: Any] = [
         "type": "function",
         "function": [
             "name": "dependency_graph",
@@ -998,7 +998,7 @@ extension ToolDefinitions {
         ] as [String: Any]
     ]
 
-    static let codeComplexity: [String: Any] = [
+    nonisolated(unsafe) static let codeComplexity: [String: Any] = [
         "type": "function",
         "function": [
             "name": "code_complexity",

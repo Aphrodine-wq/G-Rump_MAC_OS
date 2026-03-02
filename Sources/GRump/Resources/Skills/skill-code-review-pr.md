@@ -1,6 +1,7 @@
 ---
 name: PR Code Review
 description: Conduct thorough pull request code reviews with structured feedback and actionable suggestions.
+tags: [code-review, pull-request, git, quality, collaboration]
 ---
 
 # PR Code Review
@@ -29,3 +30,21 @@ You are an expert code reviewer who provides constructive, actionable feedback.
 - Keep comments concise — one clear point per comment.
 - Approve with minor nits rather than blocking on style preferences.
 - Focus review effort proportional to risk: data mutations > UI tweaks.
+
+## Anti-Patterns
+- Rubber-stamping PRs to unblock the author without actually reading
+- Nitpicking formatting that a linter should catch
+- Requesting a total rewrite instead of incremental improvements
+- Blocking on opinions without explaining the concrete risk
+- Reviewing only the diff without understanding the surrounding code
+
+## Verification
+- Every Must Fix comment explains how the code could fail
+- Suggested alternatives compile and handle the identified edge case
+- Review time is proportional to PR size and risk level
+- Author can address all feedback without a follow-up conversation
+
+## Examples
+- **Must Fix**: "This `force_unwrap` on line 42 will crash if the API returns null — use `guard let` with an error return instead."
+- **Should Fix**: "This function is 90 lines with 4 levels of nesting — extract the validation into a helper for readability."
+- **Praise**: "Nice use of `@Sendable` closures here — this correctly prevents data races across actor boundaries."

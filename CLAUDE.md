@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-G-Rump is an AI coding agent macOS/iOS app written in Swift (SwiftUI) with a Node.js backend. It provides chat-based AI assistance with local file system, shell, and system control tools, using OpenRouter for model access.
+G-Rump is an AI coding agent macOS/iOS app written in Swift (SwiftUI) with a Node.js backend. It provides chat-based AI assistance with 100+ local file system, shell, git, and system control tools, using OpenRouter for model access. Multi-provider support includes Anthropic, OpenAI, Ollama, OpenRouter, and on-device CoreML.
 
 ## Build & Run Commands
 
@@ -12,10 +12,12 @@ G-Rump is an AI coding agent macOS/iOS app written in Swift (SwiftUI) with a Nod
 
 ```bash
 make build            # Debug build (uses all CPU cores)
-make build-release    # Optimized release build
+make build-release    # Optimized universal release build (arm64 + x86_64)
 make run              # Build debug + run
 make clean            # Remove .build and dist
-swift test            # Run tests (requires full Xcode SDK)
+swift test            # Run all tests (requires full Xcode SDK)
+swift test --filter GRumpTests.ModelsTests                    # Run one test file
+swift test --filter GRumpTests.ModelsTests/testMessageCreation  # Run one test method
 ```
 
 The build uses Swift Package Manager. Dependencies resolve automatically on first build. The local `.build` directory is used (not `~/Library`) to avoid permission issues.
@@ -26,6 +28,7 @@ The build uses Swift Package Manager. Dependencies resolve automatically on firs
 cd backend && npm install   # Install dependencies
 cd backend && npm start     # Run on http://localhost:3042
 cd backend && npm run dev   # Watch mode
+cd backend && npm test      # Run backend tests
 ```
 
 Backend lint check: `node --check backend/server.js backend/proxy.js backend/auth.js backend/db.js`
@@ -35,34 +38,89 @@ Backend lint check: `node --check backend/server.js backend/proxy.js backend/aut
 ```bash
 make app              # .app bundle in dist/
 make dmg              # .app + .dmg
+make sign             # Signed .app (needs DEVELOPER_ID env)
 make package          # Signed .dmg (needs DEVELOPER_ID env)
 make notarize         # Full distribution (needs DEVELOPER_ID, APPLE_ID, TEAM_ID, APP_PASSWORD)
 ```
+
+### XcodeGen
+
+`project.yml` defines the Xcode project (macOS app, iOS app, server CLI, test bundle, Xcode extension). Generate with `xcodegen generate` (requires `brew install xcodegen`).
+
+## CI Rules
+
+CI runs 4 jobs on push/PR to `main`: tests, lint, backend tests, release build.
+
+**Hard CI failure**: `print()` statements in `Sources/GRump/` — always use `GRumpLogger` instead (categories: `.general`, `.ai`, `.persistence`, `.skills`, `.memory`, `.proactive`, `.migration`, `.spotlight`, `.notifications`, `.coreml`, `.capture`, `.liveActivity`).
+
+SwiftLint runs in strict mode. Force unwraps are warned (not blocked). `PrivacyInfo.xcprivacy` and `LICENSE` must exist.
 
 ## Architecture
 
 ### Swift App Structure (`Sources/GRump/`)
 
-**Entry point**: `GRumpApp.swift` → `AppRootView.swift` (onboarding gate) → `ContentView.swift` (main chat UI with sidebar)
+**Entry point**: `GRumpApp.swift` → `ContentView.swift` (main chat UI with sidebar). `AppDelegate.swift` enforces single-instance to prevent SQLite lock freezes.
 
-**ChatViewModel** is the central state manager, split into extensions by responsibility:
+**ChatViewModel** is the central state manager, split into extensions:
 - `ChatViewModel+Streaming.swift` — OpenRouter streaming responses
 - `ChatViewModel+ToolExecution.swift` — Tool dispatch, parallel execution, retry logic
-- `ChatViewModel+AgentModes.swift` — Plan, Build, Debate, Spec, Parallel modes
-- `ChatViewModel+Persistence.swift` — Conversation save/load
 - `ChatViewModel+Memory.swift` — Activity tracking, memory store
-
-**Key services**:
-- `OpenRouterService` — Chat completion streaming (direct or via backend proxy)
-- `MultiProviderAIService` — Multi-model support with tier-based access
-- `AmbientCodeAwarenessService` — Project file context injection
-- `LSPService` — Language Server Protocol integration
-- `FrameLoopService` — 250Hz internal loop for responsive UI (display-limited to 60/120Hz)
-- `ExecApprovals` — Security approval workflow for system commands
-
-**Data models** (`Models.swift`): `Message`, `ToolCall`, `Conversation`, `MessageThread`, `MessageBranch`. Supports linear, threaded, and branched conversation views.
+- `ChatViewModel+Messages.swift` — Message management
+- `ChatViewModel+UIState.swift` — UI state management
 
 **Agent modes**: `standard`, `plan`, `fullStack`, `argue`, `spec`, `parallel`
+
+### Tool System (4 definition files + 6 execution files)
+
+**Definitions** (`ToolDefs+*.swift`): JSON schema definitions split by domain — `FileOps`, `ShellSystem`, `GitDevOps`, `UtilsApple`. Master registry in `ToolDefinitions.swift` with `toolsForCurrentPlatform` (iOS filtering) and `toolsFiltered(allowlist:userDenylist:)`.
+
+**Execution** (`ToolExec+*.swift`): Implementations split by domain — `FileOps`, `ShellSystem`, `GitDevOps`, `AppleNative`, `Utils`, `Extended`. Parallel dispatch via `executeToolCallsParallel` with exponential backoff (200ms/500ms/1s, 2 retries).
+
+**XML tool call parsing**: `XMLToolCallParser.swift` handles models that emit inline XML instead of native `tool_calls` (three formats: `<execute>`, `<tool_call>`, `<function_call>`).
+
+**Code apply**: `CodeApplyService.swift` gives code blocks an apply/reject/undo workflow. `InlineDiffCard.swift` renders unified diffs with LCS algorithm.
+
+### MCP System (three layers)
+
+1. **Client** (`MCPService.swift`): `MCPConnectionManager` (actor-based) maintains persistent connections. Three transports: `stdio` (macOS only), `http`, `websocket`. MCP tools injected as `mcp_<serverId>_<toolName>`. Config at `~/.grump/mcp-servers.json`. `MCPCredentialVault` injects secrets as env vars for stdio processes.
+
+2. **Server Host** (`MCPServerHost.swift`): G-Rump exposes its own tools as an MCP server on TCP port `18790`. External clients (Claude Desktop, etc.) connect via `tools/list` + `tools/call`. `run_command` is refused for safety.
+
+3. **Presets** (`MCPServerConfig.swift`): ~60 preconfigured one-click servers (GitHub, Postgres, Slack, Supabase, Figma, Playwright, Stripe, etc.).
+
+### Skills System
+
+Three scopes: `builtIn` (bundled `Resources/Skills/skill-*.md`), `global` (`~/.grump/skills/`), `project` (`.grump/skills/`). Project overrides global by ID. Each skill is a `SKILL.md` file with YAML frontmatter (`name`, `description`) + markdown body.
+
+`Skill.relevanceScore(for:fileExtensions:)` scores skills against the active query + working directory file types for auto-suggestion.
+
+### Soul System
+
+AI personality via `~/.grump/SOUL.md` (global) and `.grump/SOUL.md` (project, overrides global). YAML frontmatter (`name:`, `version:`) + markdown body. Default persona is "Rump". Editable in Settings → Soul.
+
+### Key Services
+
+- `OpenRouterService` — Chat completion streaming (direct or via backend proxy)
+- `MultiProviderAIService` — Multi-model support with tier-based access
+- `LSPService` — Language Server Protocol / SourceKit-LSP integration
+- `ExecApprovals` — Security approval workflow for shell commands
+- `ConnectionMonitor` — `NWPathMonitor` + periodic health checks to `openrouter.ai` (30s interval). Exposes `.connected`/`.degraded`/`.disconnected` status.
+- `GlobalHotkeyService` — Double-tap `⌃Space` (400ms window) opens `QuickChatPopover` (floating `NSPanel`). Requires Accessibility permission.
+- `MenuBarAgent` — Menu bar extra showing project name, agent status, recent tools, proactive suggestions. Toggle: `ShowMenuBarExtra` UserDefaults key.
+- `OpenClawService` — WebSocket device node connecting to `ws://127.0.0.1:18789` for external task routing (Slack, Discord, iMessage). Toggle: `OpenClaw_Enabled` UserDefaults.
+- `ProactiveEngine` — Cron-based suggestions (git poll 5min, end-of-day review 5:30pm, morning brief 8:30am). Toggle: `ProactiveEngineEnabled` UserDefaults.
+
+### Persistence (dual-mode)
+
+`SwiftDataModels.swift` has two code paths:
+- **Xcode builds**: Full SwiftData `@Model` macros with CloudKit sync. Models: `SDConversation`, `SDMessage`, `SDChatThread`, `SDChatBranch`, `SDProject`, `SDMemoryEntry`.
+- **SPM builds** (`GRUMP_SPM_BUILD`): Plain `Codable` classes backed by `GRumpPersistenceStore` (JSON file at `~/Library/Application Support/GRump/swiftdata_store.json`).
+
+SwiftData `@Model` macros do not expand under `swift build`. This is by design.
+
+### Data Models
+
+`Models.swift`: `Message`, `ToolCall`, `Conversation`, `MessageThread`, `MessageBranch`. Supports linear, threaded, and branched conversation views.
 
 ### Backend Structure (`backend/`)
 
@@ -72,18 +130,31 @@ Express server with 4 core modules:
 - `db.js` — SQLite (users, credits, tiers: Free/Pro/Team)
 - `proxy.js` — OpenRouter proxying with credit deduction
 
-### Tests (`Tests/GRumpTests/`)
-
-Three test files: `ModelsTests.swift`, `OpenRouterServiceTests.swift`, `MemoryStoreTests.swift`. Run a single test with `swift test --filter GRumpTests.ModelsTests` or a specific method with `swift test --filter GRumpTests.ModelsTests/testMessageCreation`.
-
 ## Key Conventions
 
-- **Concurrency**: `@MainActor` on ChatViewModel, async/await throughout, `AsyncThrowingStream` for streaming, task groups for parallel tool execution. Strict concurrency is `targeted` (not `complete`).
+- **Logging**: Use `GRumpLogger.<category>` (never `print()`). CI will reject `print()` statements.
+- **Concurrency**: `@MainActor` on ChatViewModel, async/await throughout, `AsyncThrowingStream` for streaming, task groups for parallel tool execution. Strict concurrency is `complete` (set in Package.swift via `StrictConcurrency=complete`).
 - **SwiftUI state**: `@EnvironmentObject` for app-wide sharing, `@Published` for reactive props, `@AppStorage` for UserDefaults persistence. Keychain for sensitive data (API keys).
 - **Performance**: `LazyVStack` for lists, `.drawingGroup()` on streaming rows, cached markdown parsing. FPS overlay via `ShowFPSOverlay` UserDefaults key.
 - **Platform**: `#if os(macOS)` / `#else` guards for platform-specific code. macOS 14+ / iOS 17+.
-- **No sandbox**: App entitlements disable sandbox (required for shell execution and file tools).
+- **No sandbox**: App entitlements disable sandbox (required for shell execution, LSP, and file tools).
 
 ## Project Config
 
 Per-project settings live in `.grump/config.json` or `grump.json` at the project root. `.grump/context.md` is auto-injected into the system prompt when present. Exec approval rules at `~/Library/Application Support/GRump/exec-approvals.json`.
+
+### Full Reset (splash freeze, stuck state)
+
+```bash
+make reset
+```
+
+Without Make:
+
+```bash
+pkill -x GRump 2>/dev/null || true
+defaults delete com.grump.app 2>/dev/null || true
+rm -rf ~/.grump ~/Library/Application\ Support/GRump ~/Library/Application\ Support/com.grump.app
+```
+
+API keys (Keychain) are preserved.

@@ -38,6 +38,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.980, green: 0.969, blue: 0.949) // #faf7f2 warm off-white
         case .geminiTheme: return Color(red: 0.106, green: 0.110, blue: 0.122)   // #1b1c1f Gemini dark
         case .kiro: return Color(red: 0.357, green: 0.129, blue: 0.714)    // #5b21b6 royal purple
+        case .perplexity: return Color(red: 0.051, green: 0.051, blue: 0.051)  // #0d0d0d near-black
         default: return systemBgDark
         }
     }
@@ -66,6 +67,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.961, green: 0.941, blue: 0.910) // #f5f0e8 slightly warmer white
         case .geminiTheme: return Color(red: 0.157, green: 0.165, blue: 0.180)   // #282a2e elevated card
         case .kiro: return Color(red: 0.400, green: 0.165, blue: 0.757)    // #6629c1 slightly lighter purple
+        case .perplexity: return Color(red: 0.102, green: 0.102, blue: 0.110)  // #1a1a1c dark card
         default: return systemBgCard
         }
     }
@@ -94,6 +96,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.941, green: 0.922, blue: 0.890) // #f0ebe3 light warm gray
         case .geminiTheme: return Color(red: 0.122, green: 0.125, blue: 0.141)   // #1f2024 sidebar
         case .kiro: return Color(red: 0.298, green: 0.098, blue: 0.620)    // #4c19a0 darker purple sidebar
+        case .perplexity: return Color(red: 0.039, green: 0.039, blue: 0.039)  // #0a0a0a near-black sidebar
         default: return systemBgSidebar
         }
     }
@@ -122,6 +125,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.969, green: 0.953, blue: 0.925) // #f7f3ec warm input
         case .geminiTheme: return Color(red: 0.188, green: 0.192, blue: 0.212)   // #303136 input field
         case .kiro: return Color(red: 0.420, green: 0.192, blue: 0.780)    // #6b31c7 medium purple input
+        case .perplexity: return Color(red: 0.133, green: 0.133, blue: 0.145)  // #222225 dark input
         default: return systemBgInput
         }
     }
@@ -150,6 +154,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.976, green: 0.961, blue: 0.933) // #f9f5ee warm elevated
         case .geminiTheme: return Color(red: 0.220, green: 0.227, blue: 0.247)   // #383a3f elevated
         case .kiro: return Color(red: 0.443, green: 0.220, blue: 0.808)    // #7138ce brighter purple elevated
+        case .perplexity: return Color(red: 0.165, green: 0.165, blue: 0.180)  // #2a2a2e dark elevated
         default: return systemBgCard
         }
     }
@@ -180,6 +185,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.831, green: 0.549, blue: 0.306).opacity(0.4)  // #d48c4e terracotta
         case .geminiTheme: return Color(red: 1.0, green: 1.0, blue: 1.0).opacity(0.12)   // subtle white border
         case .kiro: return Color(red: 1.0, green: 1.0, blue: 1.0).opacity(0.25)    // white border on purple
+        case .perplexity: return Color(red: 0.176, green: 0.831, blue: 0.749).opacity(0.30) // #2DD4BF teal border
         default: return systemBorderCrisp
         }
     }
@@ -208,6 +214,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.831, green: 0.549, blue: 0.306).opacity(0.2)  // terracotta subtle
         case .geminiTheme: return Color(red: 1.0, green: 1.0, blue: 1.0).opacity(0.08)   // subtle border
         case .kiro: return Color(red: 1.0, green: 1.0, blue: 1.0).opacity(0.15)    // white subtle
+        case .perplexity: return Color(red: 0.176, green: 0.831, blue: 0.749).opacity(0.15) // teal subtle
         default: return systemBorderSubtle
         }
     }
@@ -249,6 +256,7 @@ struct ThemePalette {
             case .green, .teal: return googleGreen
             }
         case .kiro: return Color(red: 1.0, green: 1.0, blue: 1.0)            // #ffffff pure white accent
+        case .perplexity: return Color(red: 0.176, green: 0.831, blue: 0.749)  // #2DD4BF light teal
         default: return accent.color
         }
     }
@@ -277,6 +285,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.686, green: 0.369, blue: 0.220)  // darker terracotta
         case .geminiTheme: return Color(red: 0.259, green: 0.522, blue: 0.957)   // #4285f4
         case .kiro: return Color(red: 0.85, green: 0.85, blue: 0.85)       // light gray on purple
+        case .perplexity: return Color(red: 0.078, green: 0.722, blue: 0.651)  // #14B8A6 darker teal
         default: return accent.darkVariant
         }
     }
@@ -305,6 +314,7 @@ struct ThemePalette {
         case .anthropicTheme: return Color(red: 0.92, green: 0.62, blue: 0.42)  // lighter terracotta
         case .geminiTheme: return Color(red: 0.65, green: 0.80, blue: 1.0)     // lighter blue
         case .kiro: return Color(red: 1.0, green: 1.0, blue: 1.0)          // pure white
+        case .perplexity: return Color(red: 0.369, green: 0.918, blue: 0.831)  // #5EEAD4 lighter teal
         default: return accent.lightVariant
         }
     }
@@ -312,6 +322,7 @@ struct ThemePalette {
     var textPrimary: Color {
         switch theme {
         case .ocean, .forest, .rose, .cream, .lavender, .mint, .sunset, .sand, .peach, .anthropicTheme: return Color(red: 0.11, green: 0.11, blue: 0.12)
+        case .perplexity: return Color(red: 0.941, green: 0.941, blue: 0.949)  // #f0f0f2 near-white
         case .chatGPT: return Color(red: 0.0, green: 0.0, blue: 0.0)   // pure black text
         case .sepia, .slate, .aurora, .berry, .dusk, .coffee, .dracula, .ember, .geminiTheme: return Color(red: 0.95, green: 0.95, blue: 0.97)
         case .kiro: return Color.white
@@ -323,6 +334,7 @@ struct ThemePalette {
     var textSecondary: Color {
         switch theme {
         case .ocean, .forest, .rose, .cream, .lavender, .mint, .sunset, .sand, .peach, .anthropicTheme: return Color(red: 0.35, green: 0.35, blue: 0.38)
+        case .perplexity: return Color(red: 0.627, green: 0.627, blue: 0.659)  // #a0a0a8 medium gray
         case .chatGPT: return Color(red: 0.35, green: 0.35, blue: 0.35)   // dark gray secondary
         case .sepia, .slate, .aurora, .berry, .dusk, .coffee, .dracula, .ember, .geminiTheme: return Color(red: 0.72, green: 0.72, blue: 0.76)
         case .kiro: return Color(red: 0.85, green: 0.85, blue: 0.90)
@@ -334,6 +346,7 @@ struct ThemePalette {
     var textMuted: Color {
         switch theme {
         case .ocean, .forest, .rose, .cream, .lavender, .mint, .sunset, .sand, .peach, .anthropicTheme: return Color(red: 0.45, green: 0.45, blue: 0.48)
+        case .perplexity: return Color(red: 0.420, green: 0.420, blue: 0.459)  // #6b6b75 muted gray
         case .chatGPT: return Color(red: 0.55, green: 0.55, blue: 0.55)   // medium gray muted
         case .sepia, .slate, .aurora, .berry, .dusk, .coffee, .dracula, .ember, .geminiTheme: return Color(red: 0.60, green: 0.60, blue: 0.65)
         case .kiro: return Color(red: 0.72, green: 0.72, blue: 0.78)
@@ -420,6 +433,7 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
     case anthropicTheme
     case geminiTheme
     case kiro
+    case perplexity
 
     var id: String { rawValue }
 
@@ -450,6 +464,7 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
         case .anthropicTheme: return "Claude"
         case .geminiTheme: return "Gemini"
         case .kiro: return "Kiro"
+        case .perplexity: return "Perplexity"
         }
     }
 
@@ -480,6 +495,7 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
         case .anthropicTheme: return "sparkle"
         case .geminiTheme: return "star.fill"
         case .kiro: return "bolt.fill"
+        case .perplexity: return "globe"
         }
     }
 
@@ -487,6 +503,7 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .system: return nil
         case .light, .ocean, .forest, .rose, .cream, .lavender, .mint, .sunset, .sand, .peach, .chatGPT, .anthropicTheme: return .light
+        case .perplexity: return .dark
         case .dark, .midnight, .sepia, .slate, .aurora, .berry, .dusk, .coffee, .dracula, .ember: return .dark
         case .geminiTheme, .kiro: return .dark
         }
@@ -494,7 +511,7 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
 
     static var lightThemes: [AppTheme] { [.lavender, .mint, .ocean, .forest, .rose, .cream, .sunset, .sand, .peach, .light] }
     static var darkThemes: [AppTheme] { [.berry, .dusk, .coffee, .dracula, .midnight, .sepia, .slate, .aurora, .ember, .dark] }
-    static var funThemes: [AppTheme] { [.chatGPT, .anthropicTheme, .geminiTheme, .kiro] }
+    static var funThemes: [AppTheme] { [.chatGPT, .anthropicTheme, .geminiTheme, .kiro, .perplexity] }
 }
 
 // MARK: - Accent Color

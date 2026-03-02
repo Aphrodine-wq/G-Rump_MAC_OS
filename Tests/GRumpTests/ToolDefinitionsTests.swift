@@ -47,4 +47,100 @@ final class ToolDefinitionsTests: XCTestCase {
         XCTAssertFalse(filteredNames.contains("read_file"))
         XCTAssertFalse(filteredNames.contains("write_file"))
     }
+
+    // MARK: - Expanded Tests
+
+    func testToolCountRegression() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        XCTAssertGreaterThanOrEqual(tools.count, 50,
+            "Should have at least 50 tools defined")
+    }
+
+    func testAllToolsHaveParametersSchema() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        for tool in tools {
+            let function = tool["function"] as? [String: Any]
+            let name = function?["name"] as? String ?? "?"
+            let parameters = function?["parameters"] as? [String: Any]
+            XCTAssertNotNil(parameters, "Tool '\(name)' should have parameters schema")
+            if let params = parameters {
+                XCTAssertEqual(params["type"] as? String, "object",
+                    "Tool '\(name)' parameters type should be 'object'")
+            }
+        }
+    }
+
+    func testToolDescriptionsAreNonTrivial() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        for tool in tools {
+            let function = tool["function"] as? [String: Any]
+            let name = function?["name"] as? String ?? "?"
+            let description = function?["description"] as? String ?? ""
+            XCTAssertGreaterThan(description.count, 10,
+                "Tool '\(name)' description should be substantive (> 10 chars)")
+        }
+    }
+
+    func testToolNamesUseSnakeCase() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        let names = tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
+        for name in names {
+            XCTAssertFalse(name.contains(" "), "Tool name '\(name)' should not contain spaces")
+            XCTAssertEqual(name, name.lowercased(), "Tool name '\(name)' should be lowercase snake_case")
+        }
+    }
+
+    func testToolsFilteredWithAllowlist() {
+        let allowlist: [String] = ["read_file", "write_file", "run_command"]
+        let filtered = ToolDefinitions.toolsFiltered(allowlist: allowlist, userDenylist: [])
+        let filteredNames = Set(filtered.compactMap { ($0["function"] as? [String: Any])?["name"] as? String })
+        XCTAssertEqual(filteredNames.count, 3)
+        XCTAssertTrue(filteredNames.contains("read_file"))
+        XCTAssertTrue(filteredNames.contains("write_file"))
+        XCTAssertTrue(filteredNames.contains("run_command"))
+    }
+
+    func testToolsFilteredEmptyDenylist() {
+        let all = ToolDefinitions.toolsFiltered(allowlist: nil, userDenylist: [])
+        let platform = ToolDefinitions.toolsForCurrentPlatform
+        XCTAssertEqual(all.count, platform.count,
+            "Empty denylist should return all tools")
+    }
+
+    func testToolsFilteredDenylistOverridesAllowlist() {
+        let allowlist: [String] = ["read_file", "write_file"]
+        let filtered = ToolDefinitions.toolsFiltered(allowlist: allowlist, userDenylist: ["write_file"])
+        let names = Set(filtered.compactMap { ($0["function"] as? [String: Any])?["name"] as? String })
+        XCTAssertTrue(names.contains("read_file"))
+        XCTAssertFalse(names.contains("write_file"),
+            "Denylist should override allowlist")
+    }
+
+    func testFileToolsExist() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        let names = Set(tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String })
+        let fileTools = ["read_file", "write_file", "edit_file", "create_file",
+                         "delete_file", "move_file", "copy_file", "list_directory"]
+        for tool in fileTools {
+            XCTAssertTrue(names.contains(tool), "File tool '\(tool)' should exist")
+        }
+    }
+
+    func testGitToolsExist() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        let names = Set(tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String })
+        let gitTools = ["git_status", "git_log", "git_diff", "git_commit", "git_add"]
+        for tool in gitTools {
+            XCTAssertTrue(names.contains(tool), "Git tool '\(tool)' should exist")
+        }
+    }
+
+    func testNetworkToolsExist() {
+        let tools = ToolDefinitions.toolsForCurrentPlatform
+        let names = Set(tools.compactMap { ($0["function"] as? [String: Any])?["name"] as? String })
+        let netTools = ["web_search", "read_url", "fetch_json"]
+        for tool in netTools {
+            XCTAssertTrue(names.contains(tool), "Network tool '\(tool)' should exist")
+        }
+    }
 }

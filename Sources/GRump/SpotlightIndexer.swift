@@ -68,10 +68,12 @@ final class SpotlightIndexer {
         // Keep indexed for 90 days
         item.expirationDate = Calendar.current.date(byAdding: .day, value: 90, to: Date())
 
-        do {
-            try CSSearchableIndex.default().indexSearchableItems([item])
-        } catch {
-            GRumpLogger.spotlight.error("Index error: \(error.localizedDescription)")
+        Task.detached(priority: .utility) {
+            do {
+                try await CSSearchableIndex.default().indexSearchableItems([item])
+            } catch {
+                GRumpLogger.spotlight.error("Index error: \(error.localizedDescription)")
+            }
         }
         #endif
     }
@@ -153,10 +155,12 @@ final class SpotlightIndexer {
     /// Parse a Spotlight continuation activity and return the conversation UUID.
     static func conversationId(from userActivity: NSUserActivity) -> UUID? {
         // From Spotlight search result
+        #if os(macOS)
         if userActivity.activityType == CSSearchableItemActionType,
            let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
             return UUID(uuidString: identifier)
         }
+        #endif
         // From Handoff activity
         if userActivity.activityType == GRumpActivityType.conversation,
            let idString = userActivity.userInfo?["conversationId"] as? String {

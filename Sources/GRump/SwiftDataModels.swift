@@ -394,9 +394,22 @@ enum SwiftDataMigrator {
         UserDefaults.standard.bool(forKey: migrationKey)
     }
 
+    /// Load and decode legacy conversations.json on a background thread to avoid blocking the main thread.
+    private static nonisolated func loadLegacyConversations(from jsonURL: URL) -> [Conversation]? {
+        guard FileManager.default.fileExists(atPath: jsonURL.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: jsonURL)
+            return try JSONDecoder().decode([Conversation].self, from: data)
+        } catch {
+            GRumpLogger.migration.error("SwiftData migration failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Import legacy conversations.json into SwiftData. Idempotent.
+    /// File I/O and JSON decode run off the main thread to keep the splash screen responsive.
     @MainActor
-    static func migrateIfNeeded(context: ModelContext) {
+    static func migrateIfNeeded(context: ModelContext) async {
         guard !hasMigrated else { return }
 
         guard let appSupport = FileManager.default.urls(
@@ -415,10 +428,16 @@ enum SwiftDataMigrator {
             return
         }
 
-        do {
-            let data = try Data(contentsOf: jsonURL)
-            let legacyConversations = try JSONDecoder().decode([Conversation].self, from: data)
+        // Load and decode on background thread — this is the heaviest work
+        let loadTask = Task.detached(priority: .userInitiated) {
+            loadLegacyConversations(from: jsonURL)
+        }
+        guard let legacyConversations = await loadTask.value else {
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            return
+        }
 
+        do {
             for legacy in legacyConversations {
                 let sdConv = SDConversation(from: legacy)
                 context.insert(sdConv)

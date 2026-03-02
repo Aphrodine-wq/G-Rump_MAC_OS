@@ -34,6 +34,30 @@ export function verifyToken(token) {
   }
 }
 
+/**
+ * Refresh a token — accepts recently expired tokens (within 24h grace period)
+ * and issues a new token with fresh expiry.
+ */
+export function refreshToken(oldToken) {
+  // First try normal verification
+  let payload = verifyToken(oldToken);
+  if (payload?.userId) {
+    return signToken({ userId: payload.userId });
+  }
+
+  // If expired, check if within 24h grace period
+  try {
+    payload = jwt.verify(oldToken, secret, { ignoreExpiration: true });
+    if (!payload?.userId || !payload?.exp) return null;
+    const expiredAt = payload.exp * 1000;
+    const gracePeriod = 24 * 60 * 60 * 1000; // 24 hours
+    if (Date.now() - expiredAt > gracePeriod) return null;
+    return signToken({ userId: payload.userId });
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyGoogleIdToken(idToken) {
   if (!googleClient || GOOGLE_CLIENT_IDS.length === 0) {
     throw new Error('Google Sign-In is not configured');
@@ -63,27 +87,32 @@ export function authMiddleware(req, res, next) {
   next();
 }
 
-export function getOrCreateUserByGoogle(googleId, email) {
+export async function getOrCreateUserByGoogle(googleId, email) {
   const db = getDb();
-  const existing = db.prepare(
-    'SELECT id, email, tier, credits_balance, credits_replenished_at, display_name, avatar_url FROM users WHERE google_id = ?'
-  ).get(googleId);
+  const existing = await db.get(
+    'SELECT id, email, tier, credits_balance, credits_replenished_at, display_name, avatar_url FROM users WHERE google_id = ?',
+    [googleId]
+  );
   if (existing) {
     return { user: existing, isNew: false };
   }
   const id = randomUUID();
   const now = Date.now();
   const initialCredits = TIERS.free.creditsPerMonth;
-  db.prepare(`
-    INSERT INTO users (id, google_id, email, tier, credits_balance, credits_replenished_at, created_at, updated_at)
-    VALUES (?, ?, ?, 'free', ?, ?, ?, ?)
-  `).run(id, googleId, email, initialCredits, now, now, now);
-  const user = db.prepare('SELECT id, email, tier, credits_balance, credits_replenished_at, display_name, avatar_url FROM users WHERE id = ?').get(id);
+  await db.run(
+    `INSERT INTO users (id, google_id, email, tier, credits_balance, credits_replenished_at, created_at, updated_at)
+     VALUES (?, ?, ?, 'free', ?, ?, ?, ?)`,
+    [id, googleId, email, initialCredits, now, now, now]
+  );
+  const user = await db.get(
+    'SELECT id, email, tier, credits_balance, credits_replenished_at, display_name, avatar_url FROM users WHERE id = ?',
+    [id]
+  );
   return { user, isNew: true };
 }
 
-export function replenishCreditsIfNeeded(db, userId, currentBalance, replenishedAt) {
-  const tierRow = db.prepare('SELECT tier FROM users WHERE id = ?').get(userId);
+export async function replenishCreditsIfNeeded(db, userId, currentBalance, replenishedAt) {
+  const tierRow = await db.get('SELECT tier FROM users WHERE id = ?', [userId]);
   if (!tierRow) return currentBalance;
   const tierConfig = TIERS[tierRow.tier] ?? TIERS.free;
   const now = Date.now();
@@ -92,8 +121,10 @@ export function replenishCreditsIfNeeded(db, userId, currentBalance, replenished
   if (now - lastReplenish >= monthMs) {
     const newBalance = (currentBalance ?? 0) + tierConfig.creditsPerMonth;
     const newReplenishedAt = replenishedAt ? lastReplenish + monthMs : now;
-    db.prepare('UPDATE users SET credits_balance = ?, credits_replenished_at = ?, updated_at = ? WHERE id = ?')
-      .run(newBalance, newReplenishedAt, now, userId);
+    await db.run(
+      'UPDATE users SET credits_balance = ?, credits_replenished_at = ?, updated_at = ? WHERE id = ?',
+      [newBalance, newReplenishedAt, now, userId]
+    );
     return newBalance;
   }
   return currentBalance;

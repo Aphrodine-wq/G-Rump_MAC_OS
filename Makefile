@@ -12,8 +12,8 @@ build: build-debug ## Alias for build-debug
 build-debug: ## Fast debug build (no optimizations)
 	swift build -j $(JOBS)
 
-build-release: ## Optimized release build
-	swift build -c release -j $(JOBS)
+build-release: ## Optimized universal release build (arm64 + x86_64)
+	swift build -c release --arch arm64 --arch x86_64 -j $(JOBS)
 
 clean: ## Remove all build artifacts
 	rm -rf .build dist
@@ -39,10 +39,12 @@ notarize: ## Build + sign + .dmg + notarize (requires DEVELOPER_ID, APPLE_ID, TE
 
 reset: ## Reset app state (wipe UserDefaults, caches, data) for fresh-boot testing
 	@echo "Resetting G-Rump app state..."
-	defaults delete com.grump.app 2>/dev/null || true
-	rm -rf "$$HOME/.grump"
-	rm -rf "$$HOME/Library/Application Support/GRump"
-	@echo "✓ App state reset. Next launch will show onboarding."
+	@pkill -x GRump 2>/dev/null || true
+	@defaults delete com.grump.app 2>/dev/null || true
+	@rm -rf "$$HOME/.grump"
+	@rm -rf "$$HOME/Library/Application Support/GRump"
+	@rm -rf "$$HOME/Library/Application Support/com.grump.app"
+	@echo "✓ App state reset. Kill any frozen windows, then relaunch."
 
 # ── Help ──────────────────────────────────────────────
 

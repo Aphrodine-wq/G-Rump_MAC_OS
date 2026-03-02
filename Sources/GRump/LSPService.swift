@@ -116,7 +116,9 @@ final class LSPService: ObservableObject {
     @Published var completionItems: [LSPCompletionItem] = []
     @Published var statusMessage: String = "Not started"
 
+    #if os(macOS)
     private var process: Process?
+    #endif
     private var stdin: FileHandle?
     private var stdoutHandle: FileHandle?
     private var requestId: Int = 0
@@ -140,6 +142,7 @@ final class LSPService: ObservableObject {
     // MARK: - Lifecycle
 
     func start(workspaceRoot: String) {
+        #if os(macOS)
         guard !isRunning else { return }
         self.workspaceRoot = workspaceRoot
 
@@ -192,11 +195,16 @@ final class LSPService: ObservableObject {
         } catch {
             statusMessage = "Failed to start: \(error.localizedDescription)"
         }
+        #else
+        statusMessage = "LSP not available on this platform"
+        #endif
     }
 
     func stop() {
+        #if os(macOS)
         process?.terminate()
         process = nil
+        #endif
         stdin = nil
         stdoutHandle?.readabilityHandler = nil
         stdoutHandle = nil
@@ -489,6 +497,7 @@ final class LSPService: ObservableObject {
             }
         }
 
+        #if os(macOS)
         // Try xcrun
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
@@ -503,6 +512,7 @@ final class LSPService: ObservableObject {
            !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
             return path
         }
+        #endif
 
         return nil
     }

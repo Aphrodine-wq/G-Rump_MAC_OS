@@ -1,6 +1,7 @@
 ---
 name: Kubernetes
 description: Design Kubernetes deployments, services, and operational patterns for production workloads.
+tags: [kubernetes, k8s, containers, orchestration, cloud-native, devops]
 ---
 
 # Kubernetes

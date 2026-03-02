@@ -105,6 +105,7 @@ final class XcodeProjectService: ObservableObject {
     }
 
     func build() {
+        #if os(macOS)
         guard !projectPath.isEmpty, !selectedScheme.isEmpty else { return }
         let dir = (projectPath as NSString).deletingLastPathComponent
         let scheme = selectedScheme
@@ -124,6 +125,7 @@ final class XcodeProjectService: ObservableObject {
             try? process.run()
             process.waitUntilExit()
         }
+        #endif
     }
 
     func openInXcode() {
@@ -294,6 +296,7 @@ final class XcodeProjectService: ObservableObject {
 
         // Also try xcodebuild -list for schemes
         if schemes.isEmpty {
+            #if os(macOS)
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
             process.arguments = ["-list", "-json"]
@@ -312,6 +315,7 @@ final class XcodeProjectService: ObservableObject {
                     schemes = schemeNames.map { XcodeScheme(id: $0, name: $0, isShared: false) }
                 }
             }
+            #endif
         }
 
         return schemes

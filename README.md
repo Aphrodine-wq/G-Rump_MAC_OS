@@ -12,7 +12,7 @@ G-Rump is a native macOS AI coding agent with 100+ tools, multi-provider AI, IDE
 - **MCP Integration** — 58 pre-configured MCP servers with Keychain-backed credential vault
 - **Agent Modes** — Chat, Plan, Build, Debate, Spec — each with tailored behavior
 - **LSP Integration** — Live SourceKit-LSP diagnostics with error/warning badges
-- **Themes** — Light, Dark, and Fun themes (Cursor, ChatGPT, Claude, Gemini, Kiro)
+- **Themes** — Light, Dark, and Fun themes (ChatGPT, Claude, Gemini, Kiro, Perplexity)
 - **Layout Customization** — Zen Mode, Activity Bar, customizable panels, keyboard shortcuts
 
 ## Quick Start

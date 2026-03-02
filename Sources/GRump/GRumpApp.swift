@@ -5,14 +5,22 @@ import SwiftData
 
 @main
 struct GRumpApp: App {
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var showSplash = true
     @State private var appLoaded = false
     @StateObject private var themeManager = ThemeManager()
     @StateObject private var frameLoop = FrameLoopService()
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var ambientService = AmbientCodeAwarenessService()
+    @StateObject private var ambientMonitor = AmbientMonitor.shared
+    @StateObject private var proactiveEngine = ProactiveEngine()
     #if os(macOS)
     @AppStorage("ShowMenuBarExtra") private var showMenuBarExtra = false
+    @AppStorage("EnableMCPServer") private var enableMCPServer = false
+    @StateObject private var sparkleService = SparkleUpdateService()
+    @StateObject private var globalHotkey = GlobalHotkeyService.shared
     #endif
 
     #if !GRUMP_SPM_BUILD
@@ -39,7 +47,6 @@ struct GRumpApp: App {
             ZStack {
                 if appLoaded {
                     AppRootView()
-                        .opacity(showSplash ? 0 : 1)
                 }
 
                 if showSplash {
@@ -47,35 +54,83 @@ struct GRumpApp: App {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showSplash = false
                         }
+                        appLoaded = true
                     }
                     .transition(.opacity)
                 }
             }
             .task {
-                // Defer loading main app so first frame is just the splash (reduces lag)
-                try? await Task.sleep(for: .milliseconds(20))
-                appLoaded = true
-                #if !GRUMP_SPM_BUILD
-                // Migrate legacy conversations.json → SwiftData on first launch
-                SwiftDataMigrator.migrateIfNeeded(context: modelContainer.mainContext)
-                #endif
-                #if os(macOS)
-                // Register as macOS Services provider
-                GRumpServicesProvider.shared.register()
-                #endif
-                // Request notification authorization
+                // Request notification authorization (async, non-blocking)
                 GRumpNotificationService.shared.requestAuthorization()
+            }
+            .task {
+                // Failsafe: if splash is still showing after 4s, force-dismiss
+                try? await Task.sleep(for: .seconds(4))
+                if showSplash {
+                    withAnimation(.easeOut(duration: 0.2)) { showSplash = false }
+                    appLoaded = true
+                }
             }
             .environmentObject(themeManager)
             .environmentObject(frameLoop)
             .environmentObject(viewModel)
             .environmentObject(ambientService)
+            .environmentObject(ambientMonitor)
+            .environmentObject(proactiveEngine)
             #if !GRUMP_SPM_BUILD
             .modelContainer(modelContainer)
             #endif
             .preferredColorScheme(themeManager.colorScheme)
+            .onChange(of: showSplash) { _, newValue in
+                if !newValue {
+                    // Run blocking work only after splash is fully dismissed
+                    #if !GRUMP_SPM_BUILD
+                    Task { @MainActor in
+                        await SwiftDataMigrator.migrateIfNeeded(context: modelContainer.mainContext)
+                    }
+                    #endif
+                    #if os(macOS)
+                    Task.detached(priority: .utility) {
+                        await MainActor.run {
+                            GRumpServicesProvider.shared.register()
+                        }
+                    }
+                    // Start connection monitoring
+                    ConnectionMonitor.shared.start()
+                    // Listen for update check requests from Settings
+                    NotificationCenter.default.addObserver(forName: .init("GRumpCheckForUpdates"), object: nil, queue: .main) { [weak sparkleService] _ in
+                        sparkleService?.checkForUpdates()
+                    }
+                    // Start ambient monitoring and global hotkey
+                    ambientMonitor.startMonitoring()
+                    globalHotkey.onActivate = { [weak viewModel] in
+                        guard let vm = viewModel else { return }
+                        QuickChatWindowController.shared.toggle(viewModel: vm, themeManager: themeManager)
+                    }
+                    globalHotkey.start()
+                    // Bootstrap proactive engine with dependencies
+                    proactiveEngine.bootstrap(
+                        activityStore: viewModel.activityStore,
+                        ambientMonitor: ambientMonitor
+                    )
+                    // Start MCP server if enabled
+                    if enableMCPServer {
+                        Task { try? await MCPServerHost.shared.start() }
+                    }
+                    #endif
+                }
+            }
         #if os(macOS)
         .frame(minWidth: 800, minHeight: 550)
+        .onChange(of: enableMCPServer) { _, enabled in
+            Task {
+                if enabled {
+                    try? await MCPServerHost.shared.start()
+                } else {
+                    await MCPServerHost.shared.stop()
+                }
+            }
+        }
         #endif
             .onOpenURL { url in
                 #if os(macOS)
@@ -132,6 +187,11 @@ struct GRumpApp: App {
                     NotificationCenter.default.post(name: .init("GRumpResetLayout"), object: nil)
                 }
             }
+            #if os(macOS)
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView(sparkle: sparkleService)
+            }
+            #endif
             CommandGroup(replacing: .help) {
                 Button("What's New") {
                     NotificationCenter.default.post(name: .init("GRumpWhatsNew"), object: nil)
@@ -151,16 +211,21 @@ struct GRumpApp: App {
                 }
                 Divider()
                 Button("G-Rump Help") {
-                    if let url = URL(string: "https://grump.app") {
+                    if let url = URL(string: "https://www.g-rump.com") {
+                        #if os(macOS)
                         NSWorkspace.shared.open(url)
+                        #else
+                        UIApplication.shared.open(url)
+                        #endif
                     }
                 }
             }
         }
         #if os(macOS)
         MenuBarExtra("G-Rump", systemImage: "brain.head.profile", isInserted: $showMenuBarExtra) {
-            MenuBarExtraView()
+            MenuBarAgent()
                 .environmentObject(viewModel)
+                .environmentObject(themeManager)
         }
         #endif
     }

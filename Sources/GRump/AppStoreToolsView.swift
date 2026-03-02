@@ -77,6 +77,7 @@ final class AppStoreService: ObservableObject {
     func archive(directory: String, scheme: String) {
         isArchiving = true
         archiveLog = "Starting archive…\n"
+        #if os(macOS)
         let dir = directory
         Task.detached(priority: .userInitiated) {
             let process = Process()
@@ -107,6 +108,10 @@ final class AppStoreService: ObservableObject {
                 self.archiveLog += "\n\(process.terminationStatus == 0 ? "✓ Archive succeeded" : "✗ Archive failed")\n"
             }
         }
+        #else
+        archiveLog += "Archive is only available on macOS.\n"
+        isArchiving = false
+        #endif
     }
 
     nonisolated static func performChecks(dir: String) -> [AppStoreCheck] {

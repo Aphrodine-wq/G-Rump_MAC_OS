@@ -40,7 +40,10 @@ struct MessageListView: View {
                     let now = Date()
                     let len = newContent.count
                     let elapsed = now.timeIntervalSince(lastScrollTime)
-                    if elapsed >= 0.025 || len - lastStreamingLength >= 20 || newContent.hasSuffix("\n") {
+                    // Adaptive scroll: sync with stream metrics throttle for jank-free scrolling
+                    let scrollInterval = viewModel.streamMetrics.recommendedUpdateInterval
+                    let charThreshold = max(10, viewModel.streamMetrics.recommendedBatchSize)
+                    if elapsed >= scrollInterval || len - lastStreamingLength >= charThreshold || newContent.hasSuffix("\n") {
                         lastScrollTime = now
                         lastStreamingLength = len
                         scrollToBottomImmediate(proxy)
@@ -54,6 +57,17 @@ struct MessageListView: View {
     
     private var messagesListContent: some View {
         LazyVStack(alignment: .leading, spacing: Spacing.lg) {
+            // Intent continuity banner — shows active cross-session goal
+            if let intent = viewModel.intentContinuity.activeIntent, intent.status == .active {
+                IntentBannerView(
+                    intent: intent,
+                    onPause: { viewModel.intentContinuity.pauseActiveIntent() },
+                    onDismiss: { viewModel.intentContinuity.pauseActiveIntent() }
+                )
+                .id("intent-banner")
+                .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+            }
+
             if viewModel.filteredMessages.contains(where: { $0.role != .system && $0.role != .tool }) {
                 todayDivider
             }
@@ -70,16 +84,92 @@ struct MessageListView: View {
                     .transition(.opacity)
             }
 
-            if !viewModel.streamingContent.isEmpty {
-                StreamingMessageRow(content: viewModel.streamingContent, agentMode: viewModel.agentMode)
-                    .id("streaming")
-                    .transition(.opacity)
+            // Speculative branching panel — shows competing approaches in Explore mode
+            if !viewModel.speculativeBranches.isEmpty {
+                SpeculativeBranchView(
+                    branches: viewModel.speculativeBranches,
+                    winnerIndex: viewModel.speculativeWinnerIndex
+                )
+                .padding(.horizontal, Spacing.huge)
+                .id("speculative-branches")
+                .transition(.opacity)
             }
 
-            if viewModel.isLoading && viewModel.streamingContent.isEmpty && viewModel.parallelAgents.isEmpty {
+            if !viewModel.streamingContent.isEmpty {
+                PremiumStreamingRow(
+                    content: viewModel.streamingContent,
+                    agentMode: viewModel.agentMode,
+                    metrics: viewModel.streamMetrics
+                )
+                .id("streaming")
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .bottom)),
+                    removal: .opacity
+                ))
+            }
+
+            // Tool execution timeline
+            if !viewModel.activeToolCalls.isEmpty {
+                ToolTimelineView(
+                    toolCalls: viewModel.activeToolCalls,
+                    agentStep: viewModel.currentAgentStep,
+                    agentStepMax: viewModel.currentAgentStepMax
+                )
+                .id("tool-timeline")
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .bottom)),
+                    removal: .opacity
+                ))
+            }
+
+            if viewModel.isLoading && viewModel.streamingContent.isEmpty && viewModel.activeToolCalls.isEmpty && viewModel.parallelAgents.isEmpty {
                 EnhancedTypingIndicator()
                     .id("typing")
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                        removal: .opacity
+                    ))
+            }
+
+            // Stream error with inline retry
+            if let errorMsg = viewModel.streamErrorMessage {
+                StreamErrorView(
+                    error: errorMsg,
+                    partialContent: viewModel.streamErrorPartialContent,
+                    onRetry: {
+                        viewModel.streamErrorMessage = nil
+                        viewModel.streamErrorPartialContent = nil
+                        viewModel.errorMessage = nil
+                        viewModel.retryLastMessage()
+                    },
+                    onDismiss: {
+                        viewModel.streamErrorMessage = nil
+                        viewModel.streamErrorPartialContent = nil
+                        viewModel.errorMessage = nil
+                    }
+                )
+                .id("stream-error")
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .bottom)),
+                    removal: .opacity
+                ))
+            }
+
+            // Smart follow-up suggestions
+            if !viewModel.followUpSuggestions.isEmpty && !viewModel.isLoading {
+                FollowUpChipsView(
+                    suggestions: viewModel.followUpSuggestions,
+                    onSelect: { prompt in
+                        viewModel.followUpSuggestions = []
+                        viewModel.userInput = prompt
+                        viewModel.sendMessage()
+                    }
+                )
+                .id("follow-ups")
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .bottom)),
+                    removal: .opacity
+                ))
             }
 
             Color.clear.frame(height: Spacing.massive).id("bottom")
@@ -108,7 +198,10 @@ struct MessageListView: View {
             let ctx = toolResultContext(for: message, messages: viewModel.filteredMessages)
             ToolResultRow(message: message, toolName: ctx?.name, argSummary: ctx?.argSummary)
                 .id(message.id)
-                .transition(.opacity)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .leading)),
+                    removal: .opacity
+                ))
         } else if viewModel.conversationViewMode == .threaded {
             ThreadedMessageView(
                 viewModel: viewModel,
@@ -126,11 +219,18 @@ struct MessageListView: View {
                 onSelectThread: { viewModel.setActiveThread($0) }
             )
             .id(message.id)
-            .transition(.opacity)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .bottom)),
+                removal: .opacity
+            ))
         } else {
             MessageRow(message: message, agentMode: viewModel.agentMode)
                 .id(message.id)
-                .transition(.opacity)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: message.role == .user ? .trailing : .leading))
+                        .combined(with: .scale(scale: 0.98, anchor: message.role == .user ? .trailing : .leading)),
+                    removal: .opacity
+                ))
                 .contextMenu {
                     Button(action: { viewModel.createThread(from: message.id) }) {
                         Label("Create Thread", systemImage: "bubble.left.and.bubble.right")

@@ -21,7 +21,7 @@ enum SoulStorage {
     private static let soulFileName = "SOUL.md"
 
     static var globalSoulPath: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".grump")
             .appendingPathComponent(soulFileName)
     }
