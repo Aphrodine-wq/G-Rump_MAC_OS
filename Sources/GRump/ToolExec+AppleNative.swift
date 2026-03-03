@@ -361,13 +361,11 @@ extension ChatViewModel {
     func executeShortcutsRun(_ args: [String: Any]) async -> String {
         #if os(macOS)
         guard let name = args["name"] as? String else { return "Error: missing shortcut name" }
-        let safeName = name.replacingOccurrences(of: "'", with: "'\\''")
-        var cmd = "shortcuts run '\(safeName)'"
+        var processArgs = ["run", name]
         if let input = args["input"] as? String {
-            let safeInput = input.replacingOccurrences(of: "'", with: "'\\''")
-            cmd = "echo '\(safeInput)' | shortcuts run '\(safeName)'"
+            processArgs.append(contentsOf: ["-i", input])
         }
-        return await runShellCommand(cmd, cwd: nil, timeoutSeconds: 30)
+        return await runProcess(executablePath: "/usr/bin/shortcuts", arguments: processArgs, cwd: nil, stdoutLimitLines: 100)
         #else
         return "Error: Shortcuts are only available on macOS"
         #endif
@@ -406,32 +404,32 @@ extension ChatViewModel {
     func executeXcodebuild(_ args: [String: Any]) async -> String {
         #if os(macOS)
         guard let action = args["action"] as? String else { return "Error: missing action" }
-        var cmdParts = ["xcodebuild"]
 
         switch action {
         case "build", "test", "clean", "archive":
-            cmdParts.append(action)
+            break
         default:
             return "Error: unknown action '\(action)'. Use 'build', 'test', 'clean', or 'archive'."
         }
 
+        var processArgs = [action]
         if let project = args["project"] as? String {
-            cmdParts.append(contentsOf: ["-project", resolvePath(project)])
+            processArgs.append(contentsOf: ["-project", resolvePath(project)])
         }
         if let workspace = args["workspace"] as? String {
-            cmdParts.append(contentsOf: ["-workspace", resolvePath(workspace)])
+            processArgs.append(contentsOf: ["-workspace", resolvePath(workspace)])
         }
         if let scheme = args["scheme"] as? String {
-            cmdParts.append(contentsOf: ["-scheme", scheme])
+            processArgs.append(contentsOf: ["-scheme", scheme])
         }
         if let destination = args["destination"] as? String {
-            cmdParts.append(contentsOf: ["-destination", destination])
+            processArgs.append(contentsOf: ["-destination", destination])
         }
         let config = args["configuration"] as? String ?? "Debug"
-        cmdParts.append(contentsOf: ["-configuration", config])
+        processArgs.append(contentsOf: ["-configuration", config])
 
-        let cmd = cmdParts.map { $0.contains(" ") ? "'\($0)'" : $0 }.joined(separator: " ")
-        return await runShellCommand("\(cmd) 2>&1 | tail -50", cwd: nil, timeoutSeconds: 300)
+        let output = await runProcess(executablePath: "/usr/bin/xcodebuild", arguments: processArgs, cwd: nil, stdoutLimitLines: 50)
+        return output
         #else
         return "Error: xcodebuild is only available on macOS"
         #endif
@@ -566,8 +564,11 @@ extension ChatViewModel {
 
         if let outputPath = args["output_path"] as? String {
             let resolved = resolvePath(outputPath)
-            let safeText = text.replacingOccurrences(of: "'", with: "'\\''")
-            return await runShellCommand("say '\(safeText)' -o '\(resolved.replacingOccurrences(of: "'", with: "'\\''"))' --data-format=LEF32@22050 2>&1 && echo 'Audio saved to \(resolved)'", cwd: nil, timeoutSeconds: 30)
+            let result = await runProcess(executablePath: "/usr/bin/say", arguments: [text, "-o", resolved, "--data-format=LEF32@22050"], cwd: nil, stdoutLimitLines: 10)
+            if result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Audio saved to \(resolved)"
+            }
+            return result
         }
 
         let utterance = AVSpeechUtterance(string: text)

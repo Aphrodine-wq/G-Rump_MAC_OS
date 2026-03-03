@@ -129,7 +129,12 @@ extension ChatViewModel {
     }
 
     func executeListNetworkInterfaces() async -> String {
-        return await runShellCommand("ifconfig 2>/dev/null | grep -E '^[a-z]|inet ' | head -60", cwd: nil, timeoutSeconds: 5)
+        let output = await runProcess(executablePath: "/sbin/ifconfig", arguments: [], cwd: nil, stdoutLimitLines: 200)
+        let filtered = output.components(separatedBy: "\n").filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.hasPrefix("inet ") || (!line.hasPrefix("\t") && !line.hasPrefix(" ") && !line.isEmpty)
+        }
+        return Array(filtered.prefix(60)).joined(separator: "\n")
     }
 
     // MARK: - System Run (macOS)
