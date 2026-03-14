@@ -197,6 +197,20 @@ else
     echo "  Skills and bundled resources will be missing."
 fi
 
+# Copy Sparkle.framework (required runtime dependency for auto-updates)
+SPARKLE_FW="$BIN_DIR/Sparkle.framework"
+if [ -d "$SPARKLE_FW" ]; then
+    mkdir -p "$APP_BUNDLE/Contents/Frameworks"
+    cp -R "$SPARKLE_FW" "$APP_BUNDLE/Contents/Frameworks/"
+    # Ensure the binary's rpath includes the Frameworks directory
+    install_name_tool -add_rpath "@executable_path/../Frameworks" \
+        "$APP_BUNDLE/Contents/MacOS/GRump" 2>/dev/null || true
+    echo "  → Sparkle.framework"
+else
+    echo "⚠ Warning: Sparkle.framework not found at $SPARKLE_FW"
+    echo "  Auto-update functionality will be missing."
+fi
+
 # Copy or generate app icon
 if [ -f "$ICON_SOURCE" ]; then
     cp "$ICON_SOURCE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -232,19 +246,77 @@ echo ""
 # path at launch. This breaks Bundle.main.resourceURL and causes the app
 # to get stuck on the splash screen (resources like skills, conversations
 # data, etc. become inaccessible).
+#
+# NOTE: We avoid --deep and instead sign each embedded component individually,
+# inside-out. Apple recommends this approach because --deep does not
+# guarantee correct signing order and can produce invalid signatures on
+# nested bundles (frameworks, XPC services, helper apps).
+#
+# Signing order: innermost components first, outermost (.app) last.
+sign_component() {
+    local identity="$1"
+    local path="$2"
+    local with_entitlements="${3:-false}"
+    local with_runtime="${4:-false}"
+
+    local flags=(--force --timestamp)
+    if [ "$with_runtime" = true ]; then
+        flags+=(--options runtime)
+    fi
+    if [ "$with_entitlements" = true ] && [ -f "$ENTITLEMENTS" ]; then
+        flags+=(--entitlements "$ENTITLEMENTS")
+    fi
+    flags+=(--sign "$identity" "$path")
+
+    codesign "${flags[@]}"
+}
+
 if $DO_SIGN; then
     echo "▸ Code signing with Developer ID: $DEVELOPER_ID"
-    codesign --force --deep --options runtime \
-        --entitlements "$ENTITLEMENTS" \
-        --sign "$DEVELOPER_ID" \
-        "$APP_BUNDLE"
+    SIGN_IDENTITY="$DEVELOPER_ID"
 else
     echo "▸ Ad-hoc code signing (prevents app translocation)..."
-    codesign --force --deep \
-        --entitlements "$ENTITLEMENTS" \
-        --sign - \
-        "$APP_BUNDLE"
+    SIGN_IDENTITY="-"
 fi
+
+# Sign Sparkle XPC services (innermost)
+SPARKLE_FW_BUNDLE="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+if [ -d "$SPARKLE_FW_BUNDLE" ]; then
+    echo "  → Signing Sparkle XPC services..."
+    for xpc in "$SPARKLE_FW_BUNDLE"/Versions/B/XPCServices/*.xpc; do
+        [ -d "$xpc" ] && sign_component "$SIGN_IDENTITY" "$xpc" false "$DO_SIGN"
+    done
+
+    # Sign Sparkle Updater.app helper
+    UPDATER_APP="$SPARKLE_FW_BUNDLE/Versions/B/Updater.app"
+    if [ -d "$UPDATER_APP" ]; then
+        echo "  → Signing Sparkle Updater.app..."
+        sign_component "$SIGN_IDENTITY" "$UPDATER_APP" false "$DO_SIGN"
+    fi
+
+    # Sign Sparkle Autoupdate binary
+    AUTOUPDATE_BIN="$SPARKLE_FW_BUNDLE/Versions/B/Autoupdate"
+    if [ -f "$AUTOUPDATE_BIN" ]; then
+        echo "  → Signing Sparkle Autoupdate..."
+        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$AUTOUPDATE_BIN"
+    fi
+
+    # Sign Sparkle framework itself
+    echo "  → Signing Sparkle.framework..."
+    sign_component "$SIGN_IDENTITY" "$SPARKLE_FW_BUNDLE" false "$DO_SIGN"
+fi
+
+# Sign resource bundles
+for bundle in "$APP_BUNDLE"/Contents/Resources/*.bundle; do
+    if [ -d "$bundle" ]; then
+        echo "  → Signing $(basename "$bundle")..."
+        sign_component "$SIGN_IDENTITY" "$bundle" false "$DO_SIGN"
+    fi
+done
+
+# Sign the main app bundle (outermost, with entitlements + hardened runtime)
+echo "  → Signing G-Rump.app..."
+sign_component "$SIGN_IDENTITY" "$APP_BUNDLE" true "$DO_SIGN"
 
 # Verify signature
 echo "▸ Verifying signature..."
@@ -254,6 +326,14 @@ else
     echo "✗ Code signature verification failed"
     echo "  The app may not launch correctly from Finder."
     exit 1
+fi
+
+# Deep verification (checks all nested components)
+echo "▸ Deep verification of all components..."
+if codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1; then
+    echo "✓ Deep signature verification passed"
+else
+    echo "⚠ Deep verification found issues (may still work for ad-hoc)"
 fi
 echo ""
 

@@ -14,8 +14,9 @@ settings:
     MARKETING_VERSION: "2.0.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_STRICT_CONCURRENCY: targeted
-    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: "" # Set your team ID here
+    CODE_SIGN_IDENTITY: "Developer ID Application" # For distribution outside Mac App Store
     ENABLE_PREVIEWS: YES
 
 targets:

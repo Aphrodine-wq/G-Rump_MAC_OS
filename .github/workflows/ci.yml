@@ -3,6 +3,7 @@ name: G-Rump CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -140,15 +141,216 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-v2-
 
-      - name: Build Release
-        run: swift build -c release -j $(sysctl -n hw.ncpu)
+      - name: Install create-dmg
+        run: brew install create-dmg || true
 
-      - name: Package .app bundle
-        run: make app
+      - name: Import Developer ID certificate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "${CERTIFICATE_P12:-}" ]; then
+            echo "::warning::No signing certificate configured. Building unsigned."
+            echo "SIGNING_AVAILABLE=false" >> "$GITHUB_ENV"
+          else
+            # Create a temporary keychain for CI
+            KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+            KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
 
-      - name: Upload release artifact
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+            # Import the certificate
+            CERT_PATH="$RUNNER_TEMP/certificate.p12"
+            echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+            security import "$CERT_PATH" \
+              -P "$CERTIFICATE_PASSWORD" \
+              -A \
+              -t cert \
+              -f pkcs12 \
+              -k "$KEYCHAIN_PATH"
+            rm -f "$CERT_PATH"
+
+            # Add keychain to search list
+            security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
+
+            # Allow codesign to access the key without UI prompt
+            security set-key-partition-list -S apple-tool:,apple:,codesign: \
+              -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+            echo "SIGNING_AVAILABLE=true" >> "$GITHUB_ENV"
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+            # Extract the Developer ID identity name
+            IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+              | grep "Developer ID Application" \
+              | head -1 \
+              | sed 's/.*"\(.*\)".*/\1/')
+            echo "DEVELOPER_ID=$IDENTITY" >> "$GITHUB_ENV"
+            echo "Imported signing identity: $IDENTITY"
+          fi
+
+      - name: Build and package
+        run: |
+          if [ "${SIGNING_AVAILABLE:-false}" = "true" ]; then
+            echo "Building signed release with DMG..."
+            make package
+          else
+            echo "Building unsigned release..."
+            make app
+          fi
+
+      - name: Verify code signature
+        if: env.SIGNING_AVAILABLE == 'true'
+        run: |
+          echo "=== Signature Info ==="
+          codesign -dvv dist/G-Rump.app 2>&1
+          echo ""
+          echo "=== Deep Verification ==="
+          codesign --verify --deep --strict --verbose=2 dist/G-Rump.app 2>&1
+
+      - name: Upload .app artifact
         uses: actions/upload-artifact@v4
         with:
           name: G-Rump-${{ github.sha }}
           path: dist/G-Rump.app
           retention-days: 30
+
+      - name: Upload .dmg artifact
+        if: env.SIGNING_AVAILABLE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: G-Rump-${{ github.sha }}.dmg
+          path: dist/G-Rump.dmg
+          retention-days: 30
+
+      - name: Cleanup keychain
+        if: always() && env.KEYCHAIN_PATH != ''
+        run: security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+
+  # ── Signed + Notarized Release (on tags) ────────────────
+  distribute:
+    name: Notarize & Release
+    runs-on: macos-14
+    timeout-minutes: 45
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [critical-tests, lint, backend-tests]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Building release version: $VERSION"
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-v2-${{ hashFiles('Package.resolved', 'Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-v2-
+
+      - name: Install create-dmg
+        run: brew install create-dmg || true
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "${CERTIFICATE_P12:-}" ]; then
+            echo "::error::DEVELOPER_ID_CERTIFICATE_P12 secret is required for tagged releases."
+            exit 1
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          rm -f "$CERT_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | grep "Developer ID Application" \
+            | head -1 \
+            | sed 's/.*"\(.*\)".*/\1/')
+          echo "DEVELOPER_ID=$IDENTITY" >> "$GITHUB_ENV"
+          echo "Imported signing identity: $IDENTITY"
+
+      - name: Build, sign, DMG, and notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: make notarize
+
+      - name: Verify notarization
+        run: |
+          echo "=== Gatekeeper Assessment ==="
+          spctl --assess --type execute --verbose=2 dist/G-Rump.app 2>&1 || true
+          echo ""
+          echo "=== Staple Validation ==="
+          xcrun stapler validate dist/G-Rump.app 2>&1
+          if [ -f dist/G-Rump.dmg ]; then
+            xcrun stapler validate dist/G-Rump.dmg 2>&1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Zip the .app for GitHub release (directories can't be uploaded directly)
+          cd dist && ditto -c -k --keepParent G-Rump.app G-Rump-App.zip && cd ..
+
+          RELEASE_NOTES="## G-Rump $TAG
+
+          ### Installation (recommended)
+          1. Download **G-Rump.dmg** below
+          2. Open the DMG and drag G-Rump to Applications
+          3. Launch from Applications (no Gatekeeper warning — app is notarized)
+
+          ### Alternative
+          Download **G-Rump-App.zip**, unzip, and move to Applications.
+
+          ### Requirements
+          - macOS 14.0 (Sonoma) or later
+          - Apple Silicon or Intel Mac (universal binary)
+
+          ---
+          *Signed with Developer ID and notarized by Apple.*"
+
+          gh release create "$TAG" \
+            --title "G-Rump $TAG" \
+            --notes "$RELEASE_NOTES" \
+            dist/G-Rump.dmg \
+            dist/G-Rump-App.zip
+
+      - name: Cleanup keychain
+        if: always() && env.KEYCHAIN_PATH != ''
+        run: security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
