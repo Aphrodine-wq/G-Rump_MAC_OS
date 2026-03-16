@@ -37,7 +37,19 @@ struct ModalManagerView<Content: View>: View {
     // MARK: - Sheet Contents
 
     private var profileSheetContent: some View {
-        Text("Profile Sheet")
+        ProfileView(
+            platformUser: viewModel.platformUser,
+            onRefreshPlatformUser: { await viewModel.refreshPlatformUser() },
+            modelName: viewModel.selectedModel.displayName,
+            workingDirectory: viewModel.workingDirectory,
+            appliedPresetName: viewModel.appliedPresetName,
+            totalConversations: viewModel.conversations.count,
+            totalMessages: viewModel.conversations.reduce(0) { $0 + $1.messages.count },
+            onOpenSettings: {
+                showProfile = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showSettings = true }
+            }
+        )
     }
 
     @ViewBuilder

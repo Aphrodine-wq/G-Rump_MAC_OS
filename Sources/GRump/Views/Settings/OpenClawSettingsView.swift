@@ -142,40 +142,14 @@ struct OpenClawSettingsView: View {
             HStack {
                 Image(systemName: "shield.lefthalf.filled")
                     .foregroundColor(.orange)
-                Text("Cost Controls")
+                Text("Rate Limits")
                     .font(Typography.bodySmallSemibold)
                     .foregroundColor(.textPrimary)
             }
 
-            Text("Protect your API credits from excessive OpenClaw usage. These limits apply only to requests coming through OpenClaw.")
+            Text("Protect your system from excessive OpenClaw usage. OpenClaw does not consume additional credits.")
                 .font(Typography.captionSmall)
                 .foregroundColor(.textMuted)
-
-            // Per-session cap
-            HStack {
-                Text("Per-session credit cap")
-                    .font(Typography.captionSmall)
-                    .foregroundColor(.textSecondary)
-                Spacer()
-                TextField("100", value: $costControl.perSessionCreditCap, format: .number)
-                    .font(Typography.codeSmall)
-                    .frame(width: 80)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            // Per-day cap
-            HStack {
-                Text("Per-day credit cap")
-                    .font(Typography.captionSmall)
-                    .foregroundColor(.textSecondary)
-                Spacer()
-                TextField("500", value: $costControl.perDayCreditCap, format: .number)
-                    .font(Typography.codeSmall)
-                    .frame(width: 80)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-            }
 
             // Rate limit
             HStack {
@@ -225,8 +199,9 @@ struct OpenClawSettingsView: View {
                 .font(Typography.captionSmall)
                 .foregroundColor(.textMuted)
 
-            let freeModels: [AIModel] = [.qwen3Coder, .deepseekR1, .deepseekChat, .gemini31Flash]
-            let paidModels: [AIModel] = [.claudeSonnet4, .codex53, .gemini31Pro]
+            let freeModels = AIModel.allCases.filter { $0.tier == "Free" }
+            let smartModels = AIModel.allCases.filter { $0.tier == "Fast" }
+            let proModels = AIModel.allCases.filter { $0.tier == "Pro" }
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("Free models")
@@ -236,11 +211,19 @@ struct OpenClawSettingsView: View {
                     modelToggleRow(model)
                 }
 
-                Text("Paid models")
+                Text("Smart models")
+                    .font(Typography.micro)
+                    .foregroundColor(.blue)
+                    .padding(.top, Spacing.sm)
+                ForEach(smartModels, id: \.rawValue) { model in
+                    modelToggleRow(model)
+                }
+
+                Text("Pro models")
                     .font(Typography.micro)
                     .foregroundColor(.orange)
                     .padding(.top, Spacing.sm)
-                ForEach(paidModels, id: \.rawValue) { model in
+                ForEach(proModels, id: \.rawValue) { model in
                     modelToggleRow(model)
                 }
             }

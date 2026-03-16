@@ -38,7 +38,7 @@ final class AgentModeTests: XCTestCase {
 
     func testModeCount() {
         // Ensure we don't accidentally drop a mode
-        XCTAssertEqual(AgentMode.allCases.count, 6, "Expected 6 modes: Chat, Plan, Build, Debate, Spec, Parallel")
+        XCTAssertEqual(AgentMode.allCases.count, 7, "Expected 7 modes: Chat, Plan, Build, Debate, Spec, Parallel, Explore")
     }
 
     func testModeRawValues() {
@@ -48,6 +48,7 @@ final class AgentModeTests: XCTestCase {
         XCTAssertEqual(AgentMode.argue.rawValue, "argue")
         XCTAssertEqual(AgentMode.spec.rawValue, "spec")
         XCTAssertEqual(AgentMode.parallel.rawValue, "parallel")
+        XCTAssertEqual(AgentMode.speculative.rawValue, "speculative")
     }
 
     // MARK: - Expanded Tests
@@ -107,6 +108,7 @@ final class AgentModeTests: XCTestCase {
         XCTAssertEqual(AgentMode.argue.displayName, "Debate")
         XCTAssertEqual(AgentMode.spec.displayName, "Spec")
         XCTAssertEqual(AgentMode.parallel.displayName, "Parallel")
+        XCTAssertEqual(AgentMode.speculative.displayName, "Explore")
     }
 
     func testModeFromRawValue() {
@@ -119,5 +121,47 @@ final class AgentModeTests: XCTestCase {
     func testInvalidRawValueReturnsNil() {
         XCTAssertNil(AgentMode(rawValue: "nonexistent"))
         XCTAssertNil(AgentMode(rawValue: ""))
+    }
+
+    // MARK: - Accent Colors
+
+    func testUniqueModeAccentColors() {
+        var seen: Set<String> = []
+        for mode in AgentMode.allCases {
+            let colorDesc = "\(mode.modeAccentColor)"
+            XCTAssertFalse(seen.contains(colorDesc),
+                "\(mode.rawValue) accent color duplicates another mode")
+            seen.insert(colorDesc)
+        }
+    }
+
+    // MARK: - Description Constraints
+
+    func testDescriptionMinimumLength() {
+        for mode in AgentMode.allCases {
+            XCTAssertGreaterThanOrEqual(mode.description.count, 20,
+                "\(mode.rawValue) description should be at least 20 chars, got \(mode.description.count)")
+        }
+    }
+
+    // MARK: - Toast Message Format
+
+    func testToastMessagesStartWithSwitchedTo() {
+        for mode in AgentMode.allCases {
+            XCTAssertTrue(mode.toastMessage.hasPrefix("Switched to"),
+                "\(mode.rawValue) toast '\(mode.toastMessage)' should start with 'Switched to'")
+        }
+    }
+
+    // MARK: - Icon SF Symbol Format
+
+    func testIconsAreSFSymbolFormat() {
+        for mode in AgentMode.allCases {
+            let icon = mode.icon
+            // SF Symbols use dot-separated segments, no spaces
+            XCTAssertFalse(icon.contains(" "),
+                "\(mode.rawValue) icon '\(icon)' should not contain spaces")
+            XCTAssertFalse(icon.isEmpty)
+        }
     }
 }

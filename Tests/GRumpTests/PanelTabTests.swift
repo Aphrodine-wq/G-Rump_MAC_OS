@@ -6,13 +6,13 @@ final class PanelTabTests: XCTestCase {
     // MARK: - All Cases
 
     func testAllCasesCount() {
-        XCTAssertEqual(PanelTab.allCases.count, 17)
+        XCTAssertEqual(PanelTab.allCases.count, 18)
     }
 
     func testRawValues() {
         let expected = ["chat", "files", "preview", "simulator", "git", "tests",
                         "assets", "localization", "schema", "profiling", "logs",
-                        "spm", "xcode", "docs", "terminal", "appstore", "accessibility"]
+                        "spm", "xcode", "docs", "terminal", "appstore", "accessibility", "memory"]
         let actual = PanelTab.allCases.map(\.rawValue)
         XCTAssertEqual(actual, expected)
     }
@@ -68,9 +68,9 @@ final class PanelTabTests: XCTestCase {
 
     // MARK: - Shortcuts
 
-    func testFirstNineTabsHaveShortcuts() {
+    func testTabsWithShortcutsCount() {
         let tabsWithShortcuts = PanelTab.allCases.filter { $0.shortcut != nil }
-        XCTAssertEqual(tabsWithShortcuts.count, 9, "Should have 9 tabs with shortcuts")
+        XCTAssertEqual(tabsWithShortcuts.count, 10, "Should have 10 tabs with shortcuts")
     }
 
     func testSpecificShortcuts() {
@@ -83,6 +83,7 @@ final class PanelTabTests: XCTestCase {
         XCTAssertEqual(PanelTab.terminal.shortcut, "7")
         XCTAssertEqual(PanelTab.spm.shortcut, "8")
         XCTAssertEqual(PanelTab.docs.shortcut, "9")
+        XCTAssertEqual(PanelTab.memory.shortcut, "0")
     }
 
     func testTabsWithoutShortcuts() {
@@ -103,5 +104,20 @@ final class PanelTabTests: XCTestCase {
                 XCTAssertNotNil(Int(shortcut), "\(tab.rawValue) shortcut '\(shortcut)' should be numeric")
             }
         }
+    }
+
+    // MARK: - Memory Tab
+
+    func testMemoryTabExists() {
+        XCTAssertEqual(PanelTab.memory.rawValue, "memory")
+        XCTAssertEqual(PanelTab.memory.label, "Memory")
+        XCTAssertEqual(PanelTab.memory.icon, "brain.head.profile")
+    }
+
+    // MARK: - Labels Are Unique
+
+    func testLabelsAreUnique() {
+        let labels = PanelTab.allCases.map(\.label)
+        XCTAssertEqual(labels.count, Set(labels).count, "All PanelTab labels should be unique")
     }
 }

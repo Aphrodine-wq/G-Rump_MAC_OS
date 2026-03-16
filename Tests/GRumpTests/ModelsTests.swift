@@ -303,4 +303,212 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(decoded.id, branch.id)
         XCTAssertEqual(decoded.name, branch.name)
     }
+
+    // MARK: - AIModel Properties
+
+    func testAllAIModelsHaveDisplayNames() {
+        for model in AIModel.allCases {
+            XCTAssertFalse(model.displayName.isEmpty, "\(model.rawValue) has empty displayName")
+        }
+    }
+
+    func testAllAIModelsHaveDescriptions() {
+        for model in AIModel.allCases {
+            XCTAssertFalse(model.description.isEmpty, "\(model.rawValue) has empty description")
+        }
+    }
+
+    func testAllAIModelsHaveContextWindows() {
+        for model in AIModel.allCases {
+            XCTAssertGreaterThan(model.contextWindow, 0, "\(model.rawValue) has 0 context window")
+        }
+    }
+
+    func testAllAIModelsHaveMaxOutput() {
+        for model in AIModel.allCases {
+            XCTAssertGreaterThan(model.maxOutput, 0, "\(model.rawValue) has 0 max output")
+        }
+    }
+
+    func testMaxOutputLessThanContextWindow() {
+        for model in AIModel.allCases {
+            XCTAssertLessThan(model.maxOutput, model.contextWindow,
+                "\(model.rawValue) maxOutput should be less than contextWindow")
+        }
+    }
+
+    func testAIModelTiers() {
+        let tiers = Set(AIModel.allCases.map(\.tier))
+        XCTAssertTrue(tiers.contains("Pro"))
+        XCTAssertTrue(tiers.contains("Fast"))
+        XCTAssertTrue(tiers.contains("Free"))
+    }
+
+    func testPaidModelsRequirePaidTier() {
+        let paid: [AIModel] = [.claudeOpus46, .gemini31Pro, .claudeSonnet46, .codex53, .kimiK25]
+        for model in paid {
+            XCTAssertTrue(model.requiresPaidTier, "\(model.rawValue) should require paid tier")
+        }
+    }
+
+    func testFreeModelsDoNotRequirePaidTier() {
+        let free: [AIModel] = [.qwen3Coder, .deepseekR1, .gptOss120b, .trinityLarge, .step35Flash, .llama33, .glm45Air]
+        for model in free {
+            XCTAssertFalse(model.requiresPaidTier, "\(model.rawValue) should not require paid tier")
+        }
+    }
+
+    func testModelsForPaidTier() {
+        let proModels = AIModel.modelsForTier("pro")
+        XCTAssertTrue(proModels.contains(.claudeOpus46))
+        XCTAssertTrue(proModels.contains(.gemini31Pro))
+    }
+
+    func testModelsForTeamTier() {
+        let teamModels = AIModel.modelsForTier("team")
+        XCTAssertTrue(teamModels.contains(.claudeOpus46))
+    }
+
+    func testModelsForFreeTier() {
+        let freeModels = AIModel.modelsForTier(nil)
+        XCTAssertTrue(freeModels.contains(.qwen3Coder))
+        XCTAssertFalse(freeModels.contains(.claudeOpus46))
+    }
+
+    func testDefaultForTierPaid() {
+        let model = AIModel.defaultForTier("pro")
+        XCTAssertNotNil(model)
+        XCTAssertTrue(model.requiresPaidTier)
+    }
+
+    func testDefaultForTierFree() {
+        let model = AIModel.defaultForTier(nil)
+        XCTAssertFalse(model.requiresPaidTier)
+    }
+
+    // MARK: - Legacy Migration
+
+    func testMigrateLegacyGeminiPro() {
+        let result = AIModel.migrateLegacyID("google/gemini-2.5-pro-preview")
+        XCTAssertEqual(result, .gemini31Pro)
+    }
+
+    func testMigrateLegacyGeminiFlash() {
+        let result = AIModel.migrateLegacyID("google/gemini-2.5-flash-preview")
+        XCTAssertEqual(result, .gemini31Flash)
+    }
+
+    func testMigrateLegacyValidCurrent() {
+        let result = AIModel.migrateLegacyID(AIModel.claudeSonnet4.rawValue)
+        XCTAssertEqual(result, .claudeSonnet4)
+    }
+
+    func testMigrateLegacyUnknown() {
+        let result = AIModel.migrateLegacyID("unknown/model-xyz")
+        XCTAssertNil(result)
+    }
+
+    // MARK: - AIModel Identifiable
+
+    func testAIModelIdentifiable() {
+        for model in AIModel.allCases {
+            XCTAssertEqual(model.id, model.rawValue)
+        }
+    }
+
+    // MARK: - ParallelAgentState
+
+    func testParallelAgentStateCreation() {
+        let state = ParallelAgentState(
+            id: "agent-1",
+            agentIndex: 1,
+            taskDescription: "Read files",
+            taskType: .fileOps,
+            modelName: "Qwen3 Coder"
+        )
+        XCTAssertEqual(state.id, "agent-1")
+        XCTAssertEqual(state.agentIndex, 1)
+        XCTAssertEqual(state.taskType, .fileOps)
+        XCTAssertEqual(state.status, .pending)
+        XCTAssertTrue(state.streamingText.isEmpty)
+        XCTAssertNil(state.result)
+    }
+
+    // MARK: - ToolCallStatus Progress
+
+    func testToolCallStatusProgress() {
+        var status = ToolCallStatus(
+            id: "s1", name: "read_file", arguments: "{}",
+            status: .running
+        )
+        XCTAssertEqual(status.progress, 0.0)
+        status.progress = 0.5
+        XCTAssertEqual(status.progress, 0.5)
+    }
+
+    func testToolCallStatusSteps() {
+        var status = ToolCallStatus(
+            id: "s1", name: "multi_step", arguments: "{}",
+            status: .running
+        )
+        XCTAssertEqual(status.totalSteps, 1)
+        XCTAssertEqual(status.currentStepNumber, 0)
+        status.totalSteps = 5
+        status.currentStepNumber = 3
+        status.currentStep = "Processing"
+        XCTAssertEqual(status.currentStep, "Processing")
+    }
+
+    func testToolCallStatusTiming() {
+        var status = ToolCallStatus(
+            id: "s1", name: "t", arguments: "{}",
+            status: .running
+        )
+        XCTAssertNil(status.startTime)
+        status.startTime = Date()
+        XCTAssertNotNil(status.startTime)
+    }
+
+    // MARK: - GRumpDefaults
+
+    func testDefaultSystemPromptNotEmpty() {
+        XCTAssertFalse(GRumpDefaults.defaultSystemPrompt.isEmpty)
+    }
+
+    func testDefaultSystemPromptContainsCoreIdentity() {
+        XCTAssertTrue(GRumpDefaults.defaultSystemPrompt.contains("G-Rump"))
+    }
+
+    func testDefaultSystemPromptContainsToolGuidance() {
+        XCTAssertTrue(GRumpDefaults.defaultSystemPrompt.contains("Tool Usage"))
+    }
+
+    // MARK: - Conversation Multiple Threads
+
+    func testConversationMultipleThreads() {
+        var conv = Conversation(title: "T")
+        let msg1 = Message(role: .user, content: "First")
+        let msg2 = Message(role: .user, content: "Second")
+        conv.messages = [msg1, msg2]
+
+        let t1 = conv.createThread(from: msg1.id, name: "Thread A")
+        let t2 = conv.createThread(from: msg2.id, name: "Thread B")
+        XCTAssertNotNil(t1)
+        XCTAssertNotNil(t2)
+        XCTAssertEqual(conv.threads.count, 2)
+        // Active thread should be the last one created
+        XCTAssertEqual(conv.activeThreadId, t2)
+    }
+
+    func testConversationMultipleBranches() {
+        var conv = Conversation(title: "T")
+        let msg = Message(role: .user, content: "Branch point")
+        conv.messages = [msg]
+
+        let b1 = conv.createBranch(from: msg.id, name: "Branch A")
+        let b2 = conv.createBranch(from: msg.id, name: "Branch B")
+        XCTAssertNotNil(b1)
+        XCTAssertNotNil(b2)
+        XCTAssertEqual(conv.branches.count, 2)
+    }
 }

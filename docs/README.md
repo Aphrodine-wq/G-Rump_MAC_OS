@@ -5,40 +5,41 @@ Comprehensive documentation for the G-Rump AI coding agent.
 ## Table of Contents
 
 ### Core
-- [Architecture](architecture.md) — App structure, data flow, entry points
-- [Themes](themes.md) — Theme system, palettes, creating custom themes
-- [Design Tokens](design-tokens.md) — Typography, spacing, radii, borders, animations
-- [Settings](settings.md) — All settings tabs and what they control
+- [Architecture](core/architecture.md) — App structure, data flow, entry points
+- [Themes](core/themes.md) — Theme system, palettes, creating custom themes
+- [Design Tokens](core/design-tokens.md) — Typography, spacing, radii, borders, animations
+- [Settings](core/settings.md) — All settings tabs and what they control
 
 ### AI & Agent
-- [AI Providers](ai-providers.md) — Anthropic, OpenAI, Ollama, OpenRouter, CoreML
-- [Agent Modes](agent-modes.md) — Chat, Plan, Build, Debate, Spec
-- [Tools](tools.md) — All 100+ tools, categories, execution flow
-- [Skills](skills.md) — Skills system, bundled skills, custom project skills
-- [Soul](soul.md) — SOUL.md personality system, templates
+- [AI Providers](ai-agent/ai-providers.md) — Anthropic, OpenAI, Ollama, OpenRouter, CoreML
+- [Agent Modes](ai-agent/agent-modes.md) — Chat, Plan, Build, Debate, Spec, Parallel, Explore
+- [Tools](ai-agent/tools.md) — All 100+ tools, categories, execution flow
+- [Skills](ai-agent/skills.md) — Skills system, bundled skills, custom project skills
+- [Soul](ai-agent/soul.md) — SOUL.md personality system, templates
 
 ### IDE Features
-- [Panels](panels.md) — All 17 IDE panels
-- [Layout](layout.md) — Layout customization, Zen Mode, Activity Bar
-- [Keyboard Shortcuts](keyboard-shortcuts.md) — Complete shortcut reference
-- [LSP](lsp.md) — SourceKit-LSP integration, diagnostics, symbol graph
+- [Panels](ide/panels.md) — All 17 IDE panels
+- [Layout](ide/layout.md) — Layout customization, Zen Mode, Activity Bar
+- [Keyboard Shortcuts](ide/keyboard-shortcuts.md) — Complete shortcut reference
+- [LSP](ide/lsp.md) — SourceKit-LSP integration, diagnostics, symbol graph
 
 ### Integration
-- [MCP](mcp.md) — MCP server integration, credential vault
-- [Billing](billing.md) — Subscription tiers, credits, Stripe
-- [Backend API](backend-api.md) — Express server: auth, proxy, webhooks
-- [Notifications](notifications.md) — Notifications, Focus Filters, App Intents
+- [MCP](integration/mcp.md) — MCP server integration, credential vault
+- [Billing](integration/billing.md) — Subscription tiers, credits, Stripe
+- [Backend API](integration/backend-api.md) — Express server: auth, proxy, webhooks
+- [Notifications](integration/notifications.md) — Notifications, Focus Filters, App Intents
 
 ### Security & Privacy
-- [Security](security.md) — Exec approvals, Keychain, Secure Enclave
-- [Privacy](privacy.md) — Privacy manifest, on-device processing
+- [Security](security/security.md) — Exec approvals, Keychain, Secure Enclave
+- [Privacy](security/privacy.md) — Privacy manifest, on-device processing
 
 ### Data & Config
-- [Project Config](project-config.md) — .grump/config.json, context files, presets
-- [Data Persistence](data-persistence.md) — SwiftData models, JSON fallback, export/import
+- [Project Config](data-config/project-config.md) — .grump/config.json, context files, presets
+- [Data Persistence](data-config/data-persistence.md) — SwiftData models, JSON fallback, export/import
 
 ### Release
-- [Distribution](distribution.md) — Building, signing, notarization, DMG, Sparkle
-- [Testing](testing.md) — Test suite, CI pipeline
-- [Onboarding](onboarding.md) — Onboarding flow, first-run experience
-- [Accessibility](accessibility.md) — A11y audit panel, VoiceOver, Dynamic Type
+- [Distribution](release/distribution.md) — Building, signing, notarization, DMG, Sparkle
+- [Release Notes](release/release-notes.md) — Version history and changelog
+- [Testing](release/testing.md) — Test suite, CI pipeline
+- [Onboarding](release/onboarding.md) — Onboarding flow, first-run experience
+- [Accessibility](release/accessibility.md) — A11y audit panel, VoiceOver, Dynamic Type

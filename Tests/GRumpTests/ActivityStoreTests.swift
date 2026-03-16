@@ -166,4 +166,76 @@ final class ActivityStoreTests: XCTestCase {
         store2.setPersistencePath(path)
         XCTAssertTrue(store2.entries.isEmpty, "Clear should persist the empty state")
     }
+
+    // MARK: - Additional Edge Cases
+
+    @MainActor
+    func testActivityStoreExactlyAtCap() {
+        let store = ActivityStore()
+        for i in 0..<200 {
+            store.append(ActivityEntry(toolName: "t\(i)", summary: "s", success: true))
+        }
+        XCTAssertEqual(store.entries.count, 200, "Exactly at cap should hold 200")
+        // One more should still be 200
+        store.append(ActivityEntry(toolName: "overflow", summary: "s", success: true))
+        XCTAssertEqual(store.entries.count, 200)
+        XCTAssertEqual(store.entries.first?.toolName, "overflow", "Newest should be first")
+    }
+
+    @MainActor
+    func testActivityStoreAppendAfterClear() {
+        let store = ActivityStore()
+        store.append(ActivityEntry(toolName: "before", summary: "s", success: true))
+        store.clear()
+        store.append(ActivityEntry(toolName: "after", summary: "s", success: true))
+        XCTAssertEqual(store.entries.count, 1)
+        XCTAssertEqual(store.entries[0].toolName, "after")
+    }
+
+    @MainActor
+    func testActivityStoreSetNilPersistencePath() {
+        let store = ActivityStore()
+        store.setPersistencePath(nil)
+        store.append(ActivityEntry(toolName: "t", summary: "s", success: true))
+        XCTAssertEqual(store.entries.count, 1, "Should still store in memory")
+    }
+
+    @MainActor
+    func testActivityStorePersistenceNonexistentDir() {
+        let store = ActivityStore()
+        let path = "/tmp/grump-test-\(UUID().uuidString)/deep/dir/activity.json"
+        store.setPersistencePath(path)
+        store.append(ActivityEntry(toolName: "t", summary: "s", success: true))
+        // Should create directory and persist without crash
+        XCTAssertEqual(store.entries.count, 1)
+        // Clean up
+        try? FileManager.default.removeItem(atPath: (path as NSString).deletingLastPathComponent)
+    }
+
+    @MainActor
+    func testActivityStoreLoadFromNonexistentPath() {
+        let store = ActivityStore()
+        store.setPersistencePath("/nonexistent/path/activity.json")
+        // Should not crash, entries should be empty
+        XCTAssertTrue(store.entries.isEmpty)
+    }
+
+    func testActivityEntryMetadataBothFieldsPopulated() {
+        let meta = ActivityEntry.Metadata(filePath: "/src/main.swift", command: "swift build")
+        XCTAssertEqual(meta.filePath, "/src/main.swift")
+        XCTAssertEqual(meta.command, "swift build")
+    }
+
+    func testActivityEntryMetadataBothFieldsNil() {
+        let meta = ActivityEntry.Metadata(filePath: nil, command: nil)
+        XCTAssertNil(meta.filePath)
+        XCTAssertNil(meta.command)
+    }
+
+    @MainActor
+    func testActivityStoreIsObservableObject() {
+        let store = ActivityStore()
+        let _ = store.objectWillChange
+        // If this compiles, ObservableObject conformance is confirmed
+    }
 }

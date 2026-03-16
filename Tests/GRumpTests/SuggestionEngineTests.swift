@@ -156,6 +156,73 @@ final class SuggestionEngineTests: XCTestCase {
         }
     }
 
+    // MARK: - Engine: Lint Suggestion
+
+    func testSuggestsFixLintAfterLintWarnings() {
+        let entries = makeEntriesWithSummary([
+            ("run_linter", true, nil, "3 warnings found"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertTrue(result.contains(where: { $0.id == "fix_lint" }))
+    }
+
+    func testNoFixLintIfCleanLintRun() {
+        let entries = makeEntriesWithSummary([
+            ("run_linter", true, nil, "All clear"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertFalse(result.contains(where: { $0.id == "fix_lint" }))
+    }
+
+    func testSuggestsFixLintAfterLintErrors() {
+        let entries = makeEntriesWithSummary([
+            ("run_linter", true, nil, "2 error(s) detected"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertTrue(result.contains(where: { $0.id == "fix_lint" }))
+    }
+
+    // MARK: - Engine: Review Suggestion
+
+    func testSuggestsReviewAfterManyEdits() {
+        let entries = makeEntries([
+            ("edit_file", true, "/project/Sources/A.swift"),
+            ("edit_file", true, "/project/Sources/B.swift"),
+            ("write_file", true, "/project/Sources/C.swift"),
+            ("create_file", true, "/project/Sources/D.swift"),
+            ("edit_file", true, "/project/Sources/E.swift"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertTrue(result.contains(where: { $0.id == "review_code" }))
+    }
+
+    func testNoReviewIfFewEdits() {
+        let entries = makeEntries([
+            ("edit_file", true, "/project/Sources/A.swift"),
+            ("edit_file", true, "/project/Sources/B.swift"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertFalse(result.contains(where: { $0.id == "review_code" }))
+    }
+
+    // MARK: - Engine: Additional Commit Triggers
+
+    func testDeleteFileTriggersCommitSuggestion() {
+        let entries = makeEntries([
+            ("delete_file", true, "/project/Sources/Old.swift"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertTrue(result.contains(where: { $0.id == "commit" }))
+    }
+
+    func testFindAndReplaceTriggersCommitSuggestion() {
+        let entries = makeEntries([
+            ("find_and_replace", true, "/project/Sources/Config.swift"),
+        ])
+        let result = SuggestionEngine.suggest(activityEntries: entries, workingDirectory: "/project")
+        XCTAssertTrue(result.contains(where: { $0.id == "commit" }))
+    }
+
     // MARK: - Helpers
 
     private func makeEntries(_ specs: [(toolName: String, success: Bool, filePath: String?)]) -> [ActivityEntry] {
@@ -165,6 +232,20 @@ final class SuggestionEngineTests: XCTestCase {
                 timestamp: Date().addingTimeInterval(Double(-i)),
                 toolName: spec.toolName,
                 summary: spec.success ? "OK" : "Failed",
+                success: spec.success,
+                conversationId: UUID(),
+                metadata: spec.filePath.map { ActivityEntry.Metadata(filePath: $0) }
+            )
+        }
+    }
+
+    private func makeEntriesWithSummary(_ specs: [(toolName: String, success: Bool, filePath: String?, summary: String)]) -> [ActivityEntry] {
+        specs.enumerated().map { (i, spec) in
+            ActivityEntry(
+                id: UUID(),
+                timestamp: Date().addingTimeInterval(Double(-i)),
+                toolName: spec.toolName,
+                summary: spec.summary,
                 success: spec.success,
                 conversationId: UUID(),
                 metadata: spec.filePath.map { ActivityEntry.Metadata(filePath: $0) }

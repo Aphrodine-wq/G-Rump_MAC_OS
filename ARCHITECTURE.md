@@ -2,6 +2,52 @@
 
 Short reference for contributors on key architecture decisions.
 
+## Source Organization
+
+```
+Sources/GRump/
+├── App/                        # Entry point, AppRootView gate, AppDelegate
+├── Models/                     # Core types, GRumpDefaults, SwiftData models
+├── ViewModels/                 # ChatViewModel + 13 focused extensions
+│   ├── ChatViewModel.swift     # Core view model (~18K, property declarations)
+│   ├── +AgentLoop              # Agent loop, fast reply, retry, intent detection
+│   ├── +AgentPostRun           # Post-run cleanup and follow-up
+│   ├── +ExportImport           # Export (JSON, Markdown) and import
+│   ├── +Helpers                # API message building, token estimation
+│   ├── +Memory                 # Memory retrieval and injection
+│   ├── +Messages               # Message management
+│   ├── +ParallelAgents         # Parallel multi-agent and speculative branching
+│   ├── +Persistence            # Conversation save/load/flush
+│   ├── +PromptBuilding         # System prompt construction per mode
+│   ├── +Streaming              # Streaming event handling
+│   ├── +ThinkingParser         # <think> block extraction
+│   ├── +ToolExecution          # Tool dispatch and parallel execution
+│   └── +UIState                # UI state management
+├── Views/                      # SwiftUI views (zero loose files)
+│   ├── Chat/                   # Chat input, messages, code blocks, diffs
+│   ├── Settings/               # 8 settings tabs + extensions
+│   ├── Onboarding/             # 3-slide first-run flow
+│   ├── Panels/                 # 17 IDE panels
+│   ├── Components/             # Reusable UI components
+│   ├── Layout/                 # Sidebar, main layout shells
+│   ├── Overlays/               # Modals, keyboard shortcut overlay
+│   └── ...                     # DevTools, Git, Terminal, etc.
+├── Services/
+│   ├── AI/                     # Multi-provider (OpenRouter, Ollama, CoreML)
+│   ├── MCP/                    # Model Context Protocol client & server
+│   ├── ToolExecution/          # 100+ tool defs + executors by domain
+│   ├── Apple/                  # CoreML, Spotlight, SecureEnclave, FocusFilter
+│   ├── Developer/              # LSP, CodeApply, WritingTools
+│   └── System/                 # ConnectionMonitor, GlobalHotkey, Sparkle
+├── Intelligence/
+│   ├── Memory/                 # MemoryStore, ActivityStore, MemoryGraph
+│   ├── Suggestions/            # SuggestionEngine, types, lifecycle
+│   ├── CodeIntel/              # AmbientCodeAwareness, ContextResolver
+│   └── Analysis/               # CognitiveLoopDetector, ConfidenceCalibration
+├── Utilities/                  # ThemeManager, DesignTokens, parsers, logger
+└── Resources/                  # Skills, assets, localization, privacy manifest
+```
+
 ## Onboarding (pre-app)
 
 Onboarding runs **before** the main app. It never appears inside the Chat Interface.
@@ -9,7 +55,6 @@ Onboarding runs **before** the main app. It never appears inside the Chat Interf
 - **Gate:** `AppRootView` checks `HasCompletedOnboarding` (UserDefaults). If `false`, it shows only `OnboardingView` (full-screen). Sidebar and chat are not shown until onboarding is finished.
 - **Flow:** Splash → (if not completed) OnboardingView (3 slides, "Finish onboarding" / "Open Settings") → on finish, `HasCompletedOnboarding = true` → main app (`ContentView` with sidebar + chat).
 - **Existing users:** If the user already has an API key (e.g. after upgrade), `AppRootView.onAppear` sets `HasCompletedOnboarding = true` so they are not blocked.
-- **Files:** `AppRootView.swift` (gate + shared `ChatViewModel`), `OnboardingView.swift` (3-slide flow).
 
 ## Settings (tabbed)
 
@@ -18,7 +63,6 @@ Settings are split into **tabs** instead of a single long scroll.
 - **Tabs:** Account (API Key), Appearance (Theme + Accent), Model, Project (Working Directory), Behavior (System Prompt), Tools (active tools list), About.
 - **UI:** `SettingsView` uses `NavigationSplitView`: sidebar list of tabs, detail shows the selected section. Same bindings and behavior as before; only the layout is tabbed.
 - **Opening to a tab:** Callers can pass `initialTab: SettingsTab?` (e.g. `.model`) so the sheet opens on that tab (e.g. from the chat toolbar model badge).
-- **File:** `SettingsView.swift`; `SettingsTab` enum is internal so callers can reference it.
 
 ## 250fps target (high-frequency loop + smooth display)
 
@@ -28,7 +72,6 @@ The app targets a **250Hz internal update loop** and smooth display output (60/1
 - **Display:** Actual frame presentation is still bounded by the display refresh rate (60 or 120Hz ProMotion). The 250Hz loop is for driving time-based state and keeping the app responsive; views can observe `frameLoop.tick` if needed.
 - **FPS overlay:** Optional overlay (enable with UserDefaults `ShowFPSOverlay = true`) shows the measured loop rate in Hz.
 - **Performance:** Heavy work is avoided in view bodies (e.g. markdown parsing in `MarkdownTextView` is cached and only runs when text changes). Message and conversation lists use `LazyVStack`; streaming row uses `.drawingGroup()` to reduce redraw cost.
-- **Files:** `FrameLoopService.swift`, `FPSOverlayView.swift`; `AppRootView` and `GRumpApp` wire the loop and environment.
 
 ## Keyboard shortcuts
 
