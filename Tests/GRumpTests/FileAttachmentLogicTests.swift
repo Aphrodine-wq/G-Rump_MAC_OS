@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests the file classification, icon mapping, and type detection logic
 /// from FileAttachmentView — exercised via URL construction.

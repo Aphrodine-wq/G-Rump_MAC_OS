@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the `<thinking>` block parser used during streaming.
 /// Validates that reasoning traces wrapped in `<thinking>...</thinking>` tags

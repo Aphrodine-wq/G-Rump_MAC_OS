@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the StreamingCodeBlockView tail-only display and incremental highlighting.
 final class StreamingCodeBlockTests: XCTestCase {

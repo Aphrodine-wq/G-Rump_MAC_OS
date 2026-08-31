@@ -3,7 +3,7 @@ import Foundation
 import UIKit
 #endif
 
-struct ToolDefinitions {
+public struct ToolDefinitions {
 
     /// Tools that are only available on macOS (filtered out on iOS).
     private static let macOSOnlyTools: Set<String> = [
@@ -13,7 +13,7 @@ struct ToolDefinitions {
     ]
 
     /// Tools available on the current platform.
-    static var toolsForCurrentPlatform: [[String: Any]] {
+    public static var toolsForCurrentPlatform: [[String: Any]] {
         #if os(iOS)
         return allTools.filter { tool in
             guard let fn = tool["function"] as? [String: Any],
@@ -25,7 +25,7 @@ struct ToolDefinitions {
         #endif
     }
 
-    nonisolated(unsafe) static let allTools: [[String: Any]] = [
+    public nonisolated(unsafe) static let allTools: [[String: Any]] = [
         // File operations
         readFile,
         batchReadFiles,
@@ -221,12 +221,12 @@ struct ToolDefinitions {
     // - ToolDefs+UtilsApple.swift    (utilities, Apple-native, media, network, IDE tools)
     // - ToolDefs+Learning.swift      (learning loop: lessons, memory, reflection)
 
-    static func toolsJSONData() throws -> Data {
+    public static func toolsJSONData() throws -> Data {
         return try JSONSerialization.data(withJSONObject: allTools, options: [])
     }
 
     /// Returns tools filtered by allowlist. When allowlist is nil or empty, returns tools for current platform.
-    static func toolsFiltered(allowlist: [String]?) -> [[String: Any]] {
+    public static func toolsFiltered(allowlist: [String]?) -> [[String: Any]] {
         let base = toolsForCurrentPlatform
         guard let names = allowlist, !names.isEmpty else { return base }
         let set = Set(names.map { $0.trimmingCharacters(in: .whitespaces) })
@@ -238,7 +238,7 @@ struct ToolDefinitions {
     }
 
     /// Returns tools filtered by allowlist, then by user denylist (removes disabled tools).
-    static func toolsFiltered(allowlist: [String]?, userDenylist: Set<String>) -> [[String: Any]] {
+    public static func toolsFiltered(allowlist: [String]?, userDenylist: Set<String>) -> [[String: Any]] {
         let base = toolsFiltered(allowlist: allowlist)
         guard !userDenylist.isEmpty else { return base }
         return base.filter { tool in
@@ -249,7 +249,7 @@ struct ToolDefinitions {
     }
 
     /// Tool categories for organization in Settings.
-    enum ToolCategory: String, CaseIterable, Identifiable {
+    public enum ToolCategory: String, CaseIterable, Identifiable {
         case file = "File"
         case shell = "Shell"
         case clipboard = "Clipboard"
@@ -269,13 +269,13 @@ struct ToolDefinitions {
         case network = "Network"
         case utilities = "Utilities"
 
-        var id: String { rawValue }
+        public var id: String { rawValue }
 
-        static func category(for toolName: String) -> ToolCategory {
+        public static func category(for toolName: String) -> ToolCategory {
             toolCategoryMap[toolName] ?? .utilities
         }
 
-        nonisolated(unsafe) static let toolCategoryMap: [String: ToolCategory] = [
+        public nonisolated(unsafe) static let toolCategoryMap: [String: ToolCategory] = [
             "read_file": .file, "batch_read_files": .file, "write_file": .file, "edit_file": .file,
             "create_file": .file, "delete_file": .file, "move_file": .file, "copy_file": .file,
             "file_info": .file, "path_exists": .file, "count_lines": .file, "list_directory": .file,
@@ -329,12 +329,12 @@ struct ToolDefinitions {
     }
 
     /// Tools grouped by category for Settings UI.
-    static func toolsByCategory(_ category: ToolCategory) -> [(name: String, icon: String)] {
+    public static func toolsByCategory(_ category: ToolCategory) -> [(name: String, icon: String)] {
         toolDisplayInfo.filter { ToolCategory.category(for: $0.name) == category }
     }
 
     /// Display info (name, SF Symbol icon) for all tools. Used in Settings UI.
-    nonisolated(unsafe) static let toolDisplayInfo: [(name: String, icon: String)] = {
+    public static let toolDisplayInfo: [(name: String, icon: String)] = {
         let iconMap: [String: String] = [
             "read_file": "doc.text",
             "batch_read_files": "doc.on.doc",

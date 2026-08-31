@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 final class MessageModelTests: XCTestCase {
 
@@ -56,6 +56,20 @@ final class MessageModelTests: XCTestCase {
         ]
         let msg = Message(role: .assistant, content: "Let me do several things", toolCalls: calls)
         XCTAssertEqual(msg.toolCalls?.count, 3)
+    }
+
+    func testInternalAgentNoticeIsNotUserAuthoredPresentation() {
+        XCTAssertTrue(Message(role: .user, content: "[Agent notice] Continue verification").isInternalAgentNotice)
+        XCTAssertFalse(Message(role: .user, content: "Please show [Agent notice] literally").isInternalAgentNotice)
+        XCTAssertFalse(Message(role: .assistant, content: "[Agent notice] Continue").isInternalAgentNotice)
+    }
+
+    func testToolOnlyAssistantEnvelopeDetection() {
+        let call = ToolCall(id: "tc1", name: "read_file", arguments: "{}")
+        XCTAssertTrue(Message(role: .assistant, content: "", toolCalls: [call]).isProtocolOnlyAssistantEnvelope)
+        XCTAssertTrue(Message(role: .assistant, content: "  \n", toolCalls: [call]).isProtocolOnlyAssistantEnvelope)
+        XCTAssertFalse(Message(role: .assistant, content: "I checked the file.", toolCalls: [call]).isProtocolOnlyAssistantEnvelope)
+        XCTAssertFalse(Message(role: .tool, content: "", toolCalls: [call]).isProtocolOnlyAssistantEnvelope)
     }
 
     // MARK: - Message Codable

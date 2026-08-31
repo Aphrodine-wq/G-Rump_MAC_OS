@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the conversation export/import functionality.
 /// Validates Markdown string generation, JSON round-trip, and filename sanitization.

@@ -1,6 +1,6 @@
 import XCTest
 import UniformTypeIdentifiers
-@testable import GRump
+@testable import GRumpAppCore
 
 final class ConversationDocumentTests: XCTestCase {
 

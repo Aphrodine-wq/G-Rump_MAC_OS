@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Extended edge-case tests for FollowUpGenerator beyond the base FollowUpGeneratorTests.
 final class FollowUpGeneratorExtendedTests: XCTestCase {

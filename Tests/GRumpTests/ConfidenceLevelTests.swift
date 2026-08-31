@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for ConfidenceLevel, ConfidenceSignal, and ConfidenceReport — pure logic.
 final class ConfidenceLevelTests: XCTestCase {

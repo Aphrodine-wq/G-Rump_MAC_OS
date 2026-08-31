@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for ProactiveSuggestionType and SuggestionFactory.
 final class SuggestionTypesTests: XCTestCase {

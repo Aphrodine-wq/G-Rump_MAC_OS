@@ -1,6 +1,6 @@
 import XCTest
 import OSLog
-@testable import GRump
+@testable import GRumpAppCore
 
 final class GRumpLoggerTests: XCTestCase {
 

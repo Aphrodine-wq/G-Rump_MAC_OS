@@ -3,7 +3,9 @@ import SwiftUI
 import SwiftData
 #endif
 
+#if !GRUMP_LIBRARY_BUILD
 @main
+#endif
 struct GRumpApp: App {
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate

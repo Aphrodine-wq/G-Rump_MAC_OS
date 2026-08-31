@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the `sendMessage()` flow in `ChatViewModel+Streaming`.
 /// Covers input validation, provider/connectivity guards, message appending,

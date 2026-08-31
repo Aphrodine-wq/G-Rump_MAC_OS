@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 #if os(macOS)
 /// Tests the VoiceInputService state machine and error handling.

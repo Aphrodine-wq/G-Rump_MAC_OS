@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the MarkdownTextView block parsing logic.
 /// Validates that markdown gets correctly split into typed blocks—

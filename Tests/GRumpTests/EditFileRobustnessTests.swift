@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Covers the reliability contract of `executeEditFile`: uniqueness guarding,
 /// explicit replace_all, and the whitespace-tolerant single-match fallback.

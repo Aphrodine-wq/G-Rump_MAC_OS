@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Transport tests for `OpenAICompatibleService`. The default configuration is
 /// Qwen (Alibaba DashScope); dedicated sections exercise the OpenRouter and

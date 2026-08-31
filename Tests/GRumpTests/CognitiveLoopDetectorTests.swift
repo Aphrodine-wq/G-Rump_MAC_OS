@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for CognitiveLoopDetector — action fingerprinting, loop detection, and pivot strategies.
 final class CognitiveLoopDetectorTests: XCTestCase {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Additional coverage for the brain subsystems and the CI headless guard.
 final class BrainCoverageTests: XCTestCase {

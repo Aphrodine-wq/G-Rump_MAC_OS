@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 @MainActor
 final class CodeApplyServiceTests: XCTestCase {

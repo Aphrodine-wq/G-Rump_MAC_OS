@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for system prompt construction per agent mode.
 /// Validates that `prependModeInstructions` produces the expected mode-specific

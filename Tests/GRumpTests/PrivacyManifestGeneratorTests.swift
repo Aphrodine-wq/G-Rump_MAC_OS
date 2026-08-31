@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import GRump
+@testable import GRumpAppCore
 
 final class PrivacyManifestGeneratorTests: XCTestCase {
 

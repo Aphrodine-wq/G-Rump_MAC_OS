@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests the pure business logic behind ChatInputView — send gating, return key
 /// handling, attachment management, and hint text selection.

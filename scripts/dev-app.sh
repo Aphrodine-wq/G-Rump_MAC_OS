@@ -31,7 +31,7 @@ for arg in "$@"; do
 done
 
 echo "▸ Building ($CONFIG, native arch)..."
-swift build -c "$CONFIG" -j "$(sysctl -n hw.ncpu)"
+swift build -c "$CONFIG" --product G-Rump -j "$(sysctl -n hw.ncpu)"
 
 BIN_DIR=$(swift build -c "$CONFIG" --show-bin-path)
 APP="dist-dev/G-Rump.app"
@@ -39,11 +39,11 @@ APP="dist-dev/G-Rump.app"
 echo "▸ Assembling $APP..."
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/GRump" "$APP/Contents/MacOS/GRump"
+cp "$BIN_DIR/G-Rump" "$APP/Contents/MacOS/GRump"
 chmod +x "$APP/Contents/MacOS/GRump"
 cp Sources/GRump/Info.plist "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
-[ -d "$BIN_DIR/GRump_GRump.bundle" ] && cp -R "$BIN_DIR/GRump_GRump.bundle" "$APP/Contents/Resources/"
+[ -d "$BIN_DIR/GRump_GRumpAppCore.bundle" ] && cp -R "$BIN_DIR/GRump_GRumpAppCore.bundle" "$APP/Contents/Resources/"
 if [ -d "$BIN_DIR/Sparkle.framework" ]; then
   mkdir -p "$APP/Contents/Frameworks"
   cp -R "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/"

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for TaskType enum properties — displayName, icon, raw values,
 /// and CaseIterable conformance.

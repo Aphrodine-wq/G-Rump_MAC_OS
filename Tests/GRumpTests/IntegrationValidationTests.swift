@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// End-to-end validation tests that verify models, services, and their interactions
 /// work correctly together. These tests catch issues that unit tests miss.
