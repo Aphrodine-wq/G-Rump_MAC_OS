@@ -175,14 +175,6 @@ struct PremiumStreamingRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Inline label matching MessageRow style
-            HStack(spacing: Spacing.sm) {
-                FrownyFaceLogo(size: 16, mood: modeMood)
-                Text("G-Rump")
-                    .font(Typography.captionSmallSemibold)
-                    .foregroundColor(themeManager.palette.textMuted)
-            }
-
             // Claude-style thinking indicator (shown during reasoning phase)
             if viewModel.isThinking || !viewModel.thinkingContent.isEmpty {
                 ThinkingIndicatorView(
@@ -210,26 +202,12 @@ struct PremiumStreamingRow: View {
                 }
                 .transition(.opacity.animation(.easeIn(duration: 0.2)))
             }
-
-            // Enhanced status line with word count
-            StreamingStatusLine(metrics: metrics)
         }
         .padding(.horizontal, Spacing.huge)
         .padding(.vertical, Spacing.sm)
-        .overlay(alignment: .leading) {
-            // Thin mode-color accent bar on the left edge
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(agentMode.modeAccentColor)
-                .frame(width: 3)
-                .padding(.vertical, Spacing.md)
-                .padding(.leading, Spacing.lg)
-                .opacity(0.7)
-        }
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity
         ))
     }
-
-    private var modeMood: LogoMood { agentMode.logoMood }
 }

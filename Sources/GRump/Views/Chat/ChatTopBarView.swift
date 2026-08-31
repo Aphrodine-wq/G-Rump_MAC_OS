@@ -236,7 +236,7 @@ struct ChatTopBarView: View {
     private var connectionStatusColor: Color {
         if viewModel.isLoading { return .orange }
         if viewModel.errorMessage != nil { return .red }
-        return .accentGreen
+        return viewModel.isAIProviderConfigured ? .accentGreen : themeManager.palette.textMuted
     }
 
     private var modelPickerLabel: some View {

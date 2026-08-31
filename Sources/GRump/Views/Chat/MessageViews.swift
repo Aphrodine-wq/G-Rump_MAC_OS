@@ -27,7 +27,6 @@ struct MessageRow: View {
     @State private var reaction: MessageReaction?
     @State private var isEditing = false
     @State private var editText = ""
-    @State private var showAllTools = false
     @State private var isCollapsed: Bool? // nil = auto-detect on appear
     @ObservedObject private var speech = SpeechOutputService.shared
 
@@ -74,21 +73,11 @@ struct MessageRow: View {
 
     // MARK: - Mode-Specific Styling
 
-    private var modeMood: LogoMood { agentMode.logoMood }
-
     private var modeLineSpacing: CGFloat {
         switch agentMode {
         case .plan: return 2        // tighter for structured lists
         case .fullStack: return 3   // standard
         case .spec: return 4        // slightly spacious for Q&A
-        }
-    }
-
-    private var modeBorderColor: Color? {
-        switch agentMode {
-        case .plan: return Color(red: 0.3, green: 0.6, blue: 1.0).opacity(0.3)
-        case .fullStack: return Color(red: 0.2, green: 0.85, blue: 0.5).opacity(0.3)
-        case .spec: return Color(red: 0.8, green: 0.6, blue: 1.0).opacity(0.3)
         }
     }
 
@@ -154,6 +143,7 @@ struct MessageRow: View {
                             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                                 .stroke(themeManager.palette.borderSubtle, lineWidth: Border.thin)
                         )
+                        .frame(maxWidth: 680, alignment: .leading)
 
                     // Edit button on hover
                     if isHovered {
@@ -190,65 +180,9 @@ struct MessageRow: View {
 
     private var assistantBlock: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Inline label: tiny frowny icon + "G-Rump"
-            HStack(spacing: Spacing.sm) {
-                FrownyFaceLogo(size: 16, mood: modeMood)
-                Text("G-Rump")
-                    .font(Typography.captionSmallSemibold)
-                    .foregroundColor(themeManager.palette.textMuted)
-            }
-
             // Captured reasoning trace — collapsed by default, reopenable
             if !persistedThinkingText.isEmpty {
                 ThinkingDisclosureView(thinkingText: persistedThinkingText)
-            }
-
-            // Tool calls as compact one-liners
-            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    ForEach(Array((showAllTools ? toolCalls : Array(toolCalls.prefix(6))).enumerated()), id: \.offset) { _, call in
-                        HStack(spacing: Spacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.accentGreen.opacity(0.15))
-                                    .frame(width: 18, height: 18)
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundColor(.accentGreen)
-                            }
-                            HStack(spacing: Spacing.xs) {
-                                Image(systemName: toolIconForName(call.name))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(.accentGreen)
-                                Text(call.name.replacingOccurrences(of: "_", with: " "))
-                                    .font(Typography.captionSmallSemibold)
-                                    .foregroundColor(themeManager.palette.textPrimary)
-                            }
-                            .padding(.horizontal, Spacing.md)
-                            .padding(.vertical, 3)
-                            .background(Color.accentGreen.opacity(0.08))
-                            .clipShape(Capsule())
-
-                            // Show key argument (path or command)
-                            if let argPreview = toolArgPreview(call.arguments) {
-                                Text(argPreview)
-                                    .font(Typography.captionSmall)
-                                    .fontDesign(.monospaced)
-                                    .foregroundColor(themeManager.palette.textMuted)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    if toolCalls.count > 6 {
-                        Button(action: { showAllTools.toggle() }) {
-                            Text(showAllTools ? "Show less" : "+\(toolCalls.count - 6) more")
-                                .font(Typography.captionSmall)
-                                .foregroundColor(themeManager.palette.effectiveAccent)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, Spacing.sm)
             }
 
             // Message content — flat, no bubble (with auto-collapse for long messages)
@@ -311,7 +245,7 @@ struct MessageRow: View {
                let parsed = QuestionParser.parse(from: message.content) {
                 QuestionOptionGrid(question: parsed) { selected in
                     viewModel.userInput = selected.label
-                    Task { await viewModel.sendMessage() }
+                    viewModel.sendMessage()
                 }
                 .padding(.top, Spacing.sm)
             }
@@ -323,14 +257,6 @@ struct MessageRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .leading) {
-            if let borderColor = modeBorderColor {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(borderColor)
-                    .frame(width: 3)
-                    .padding(.vertical, Spacing.sm)
-            }
-        }
         .animation(.easeInOut(duration: Anim.instant), value: isHovered)
     }
 
@@ -381,21 +307,7 @@ struct MessageRow: View {
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Regenerate response")
 
-            Spacer()
-
-            // Word count (subtle)
-            Text(wordCountLabel)
-                .font(Typography.micro)
-                .foregroundColor(themeManager.palette.textMuted.opacity(0.5))
         }
-    }
-
-    private var wordCountLabel: String {
-        let words = message.content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
-        if words < 1000 {
-            return "\(words) words"
-        }
-        return String(format: "%.1fk words", Double(words) / 1000.0)
     }
 
     // MARK: - Shared Components

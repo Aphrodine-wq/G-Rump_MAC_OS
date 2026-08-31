@@ -39,8 +39,8 @@ struct ToolResultRow: View {
     }
 
     private var statusColor: Color {
-        let content = message.content.lowercased()
-        if content.contains("error") || content.contains("failed") || content.contains("not found") {
+        let content = message.content.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if content.hasPrefix("error") || content.hasPrefix("failed") || content.contains("\"iserror\":true") {
             return .red
         }
         return .accentGreen

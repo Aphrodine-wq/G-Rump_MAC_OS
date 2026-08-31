@@ -213,11 +213,13 @@ class ChatViewModel: ObservableObject {
     func selectProviderAndModel(provider: AIProvider, model: EnhancedAIModel) {
         aiService.selectProvider(provider)
         aiService.selectModel(model)
+        apiKey = aiService.modelRegistry.apiKey(for: provider) ?? ""
     }
 
     /// Select just a provider (model auto-selected)
     func selectProvider(_ provider: AIProvider) {
         aiService.selectProvider(provider)
+        apiKey = aiService.modelRegistry.apiKey(for: provider) ?? ""
     }
 
     init() {

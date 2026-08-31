@@ -14,6 +14,7 @@ struct MessageListView: View {
     @State private var lastScrollTime: Date = .distantPast
     @State private var lastStreamingLength: Int = 0
     @State private var expandedMessageIds: Set<UUID> = []
+    @State private var isFollowingLatest = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,43 +22,69 @@ struct MessageListView: View {
             ConversationSearchBar()
 
             ScrollViewReader { proxy in
-            ScrollView {
-                messagesListContent
-            }
-            .background(themeManager.palette.bgDark)
-            .onAppear {
-                if !viewModel.messages.isEmpty || !viewModel.streamingContent.isEmpty {
-                    scrollToBottom(proxy)
+                ScrollView {
+                    messagesListContent
+                        .frame(maxWidth: 920)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-            }
-            .onChange(of: viewModel.currentConversation?.id) { _, _ in
-                if !viewModel.messages.isEmpty || !viewModel.streamingContent.isEmpty {
-                    scrollToBottom(proxy)
-                }
-            }
-            .onChange(of: viewModel.messages) { _, _ in scrollToBottom(proxy) }
-            .onChange(of: viewModel.streamingContent) { _, newContent in
-                if newContent.isEmpty {
-                    lastStreamingLength = 0
-                    scrollToBottom(proxy)
-                } else {
-                    let now = Date()
-                    let len = newContent.count
-                    let elapsed = now.timeIntervalSince(lastScrollTime)
-                    // Adaptive scroll: sync with stream metrics throttle for jank-free scrolling
-                    let scrollInterval = viewModel.streamMetrics.recommendedUpdateInterval
-                    let charThreshold = max(10, viewModel.streamMetrics.recommendedBatchSize)
-                    if elapsed >= scrollInterval || len - lastStreamingLength >= charThreshold || newContent.hasSuffix("\n") {
-                        lastScrollTime = now
-                        lastStreamingLength = len
-                        scrollToBottomImmediate(proxy)
+                .background(themeManager.palette.bgDark)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8).onChanged { _ in
+                        isFollowingLatest = false
+                    }
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if !isFollowingLatest && (!displayMessages.isEmpty || !viewModel.streamingContent.isEmpty) {
+                        jumpToLatestButton(proxy)
+                            .padding(.trailing, Spacing.xxl)
+                            .padding(.bottom, Spacing.lg)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
                 }
+                .onAppear {
+                    if !viewModel.messages.isEmpty || !viewModel.streamingContent.isEmpty {
+                        scrollToBottom(proxy)
+                    }
+                }
+                .onChange(of: viewModel.currentConversation?.id) { _, _ in
+                    isFollowingLatest = true
+                    if !viewModel.messages.isEmpty || !viewModel.streamingContent.isEmpty {
+                        scrollToBottom(proxy)
+                    }
+                }
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    // A newly submitted user message always resumes following.
+                    // Tool and assistant updates respect the reader's scroll position.
+                    if viewModel.filteredMessages.last?.role == .user,
+                       viewModel.filteredMessages.last?.isInternalAgentNotice != true {
+                        isFollowingLatest = true
+                    }
+                    if isFollowingLatest { scrollToBottom(proxy) }
+                }
+                .onChange(of: viewModel.streamingContent) { _, newContent in
+                    guard isFollowingLatest else { return }
+                    if newContent.isEmpty {
+                        lastStreamingLength = 0
+                        scrollToBottom(proxy)
+                    } else {
+                        let now = Date()
+                        let len = newContent.count
+                        let elapsed = now.timeIntervalSince(lastScrollTime)
+                        // Adaptive scroll: sync with stream metrics throttle for jank-free scrolling
+                        let scrollInterval = viewModel.streamMetrics.recommendedUpdateInterval
+                        let charThreshold = max(10, viewModel.streamMetrics.recommendedBatchSize)
+                        if elapsed >= scrollInterval || len - lastStreamingLength >= charThreshold || newContent.hasSuffix("\n") {
+                            lastScrollTime = now
+                            lastStreamingLength = len
+                            scrollToBottomImmediate(proxy)
+                        }
+                    }
+                }
+                .onChange(of: viewModel.scrollToBottomTrigger) { _, _ in
+                    isFollowingLatest = true
+                    scrollToBottom(proxy)
+                }
             }
-            .onChange(of: viewModel.scrollToBottomTrigger) { _, _ in
-                scrollToBottom(proxy)
-            }
-        }
         } // end VStack
     }
 
@@ -76,14 +103,10 @@ struct MessageListView: View {
                 .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
             }
 
-            if viewModel.filteredMessages.contains(where: { $0.role != .system && $0.role != .tool }) {
-                todayDivider
-            }
-
-            ForEach(viewModel.filteredMessages.filter { $0.role != .system }) { message in
+            ForEach(displayMessages) { message in
                 messageRowView(for: message)
             }
-            .animation(.easeOut(duration: Anim.smooth), value: viewModel.filteredMessages.count)
+            .animation(.easeOut(duration: Anim.quick), value: displayMessages.count)
 
             if !viewModel.streamingContent.isEmpty {
                 PremiumStreamingRow(
@@ -170,17 +193,15 @@ struct MessageListView: View {
         .padding(.vertical, Spacing.xl)
     }
 
-    private var todayDivider: some View {
-        HStack(spacing: Spacing.xl) {
-            Rectangle().fill(themeManager.palette.borderCrisp.opacity(0.7)).frame(height: Border.thin)
-            Text("Today")
-                .font(Typography.captionSmallSemibold)
-                .foregroundColor(.textMuted)
-                .tracking(0.3)
-            Rectangle().fill(themeManager.palette.borderCrisp.opacity(0.7)).frame(height: Border.thin)
+    /// The model needs internal notices and assistant tool-call envelopes in its
+    /// history, but users should see a clean transcript instead of protocol noise.
+    private var displayMessages: [Message] {
+        viewModel.filteredMessages.filter { message in
+            guard message.role != .system else { return false }
+            guard !message.isInternalAgentNotice else { return false }
+            guard !message.isProtocolOnlyAssistantEnvelope else { return false }
+            return true
         }
-        .padding(.horizontal, Spacing.colossal)
-        .padding(.vertical, Spacing.xxl)
     }
 
     // MARK: - Message Row
@@ -219,11 +240,7 @@ struct MessageListView: View {
         } else {
             MessageRow(message: message, agentMode: viewModel.agentMode)
                 .id(message.id)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: message.role == .user ? .trailing : .leading))
-                        .combined(with: .scale(scale: 0.98, anchor: message.role == .user ? .trailing : .leading)),
-                    removal: .opacity
-                ))
+                .transition(.opacity)
                 .contextMenu {
                     Button(action: { viewModel.createThread(from: message.id) }) {
                         Label("Create Thread", systemImage: "bubble.left.and.bubble.right")
@@ -265,5 +282,28 @@ struct MessageListView: View {
 
     private func scrollToBottomImmediate(_ proxy: ScrollViewProxy) {
         proxy.scrollTo("bottom", anchor: .bottom)
+    }
+
+    private func jumpToLatestButton(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            isFollowingLatest = true
+            scrollToBottom(proxy)
+        } label: {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("Latest")
+                    .font(Typography.captionSmallSemibold)
+            }
+            .foregroundColor(themeManager.palette.textPrimary)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(themeManager.palette.bgElevated)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(themeManager.palette.borderCrisp, lineWidth: Border.thin))
+            .shadow(color: themeManager.palette.bgDark.opacity(0.35), radius: 8, y: 3)
+        }
+        .buttonStyle(.plain)
+        .help("Jump to the latest response")
     }
 }
