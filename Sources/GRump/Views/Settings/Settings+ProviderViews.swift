@@ -120,6 +120,11 @@ extension SettingsView {
                     Text(subtitle)
                         .font(Typography.captionSmall)
                         .foregroundColor(.textMuted)
+                    if let environmentName = provider.environmentCredentialNames.first {
+                        Text("Automatically checks Keychain and \(environmentName) when selected.")
+                            .font(Typography.micro)
+                            .foregroundColor(.textMuted.opacity(0.75))
+                    }
                 }
 
                 Spacer()
@@ -128,6 +133,10 @@ extension SettingsView {
             if provider.requiresAPIKey {
                 Divider()
                 VStack(alignment: .leading, spacing: Spacing.md) {
+                    if provider == .openRouter {
+                        openRouterOAuthControls(registry: registry)
+                        Divider()
+                    }
                     Text("\(provider.displayName) API Key")
                         .font(Typography.captionSemibold)
                         .foregroundColor(.textSecondary)
@@ -186,6 +195,63 @@ extension SettingsView {
                 .foregroundColor(.textSecondary)
 
             models()
+        }
+    }
+
+    @ViewBuilder
+    func openRouterOAuthControls(registry: AIModelRegistry) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                Button {
+                    openRouterOAuth.connect()
+                } label: {
+                    HStack(spacing: Spacing.sm) {
+                        if openRouterOAuth.state.isConnecting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                        }
+                        Text(openRouterOAuth.state.isConnecting ? "Connecting…" : "Connect with OpenRouter")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(themeManager.palette.effectiveAccent)
+                .disabled(openRouterOAuth.state.isConnecting)
+
+                if openRouterOAuth.state.isConnecting {
+                    Button("Cancel") { openRouterOAuth.cancel() }
+                        .buttonStyle(.bordered)
+                }
+            }
+
+            switch openRouterOAuth.state {
+            case .idle:
+                Text("Authorizes in your browser using OAuth PKCE and stores the resulting user-controlled key in Keychain.")
+                    .font(Typography.micro)
+                    .foregroundColor(.textMuted)
+            case .openingBrowser, .waitingForAuthorization:
+                Text("Finish authorization in your browser. G-Rump is waiting on a one-time loopback callback.")
+                    .font(Typography.micro)
+                    .foregroundColor(.textMuted)
+            case .exchangingCode:
+                Text("Finishing the secure connection…")
+                    .font(Typography.micro)
+                    .foregroundColor(.textMuted)
+            case .connected:
+                Label("Connected with OpenRouter", systemImage: "checkmark.circle.fill")
+                    .font(Typography.captionSmall)
+                    .foregroundColor(.accentGreen)
+            case .failed(let message):
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(Typography.captionSmall)
+                    .foregroundColor(.red)
+            }
+        }
+        .onChange(of: openRouterOAuth.state) { _, state in
+            if state == .connected {
+                providerAPIKeys[AIProvider.openRouter.rawValue] = registry.apiKey(for: .openRouter) ?? ""
+                providerKeyValidation[AIProvider.openRouter.rawValue] = .result(.valid)
+            }
         }
     }
 
