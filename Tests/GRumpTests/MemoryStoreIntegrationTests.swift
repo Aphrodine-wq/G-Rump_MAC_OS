@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for MemoryStore — entry lifecycle, persistence, retrieval, content truncation.
 final class MemoryStoreIntegrationTests: XCTestCase {

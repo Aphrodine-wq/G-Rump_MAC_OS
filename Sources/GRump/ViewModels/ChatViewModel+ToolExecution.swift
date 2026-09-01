@@ -96,6 +96,14 @@ extension ChatViewModel {
             }
         }
 
+        // Portable file and utility capabilities now execute through GRumpKit.
+        // The switch below remains as a compatibility fallback while the
+        // remaining Apple/UI handlers are migrated pack-by-pack.
+        if AppHarnessBridge.routedNames.contains(name),
+           let result = await AppHarnessBridge.shared.execute(name: name, arguments: arguments, workspace: workingDirectory) {
+            return result
+        }
+
         switch name {
         case "read_file":
             return executeReadFile(args)

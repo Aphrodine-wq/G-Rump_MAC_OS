@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the streaming lifecycle in `ChatViewModel+Streaming`.
 /// Covers stop, pause, resume, restart, and state-reset behaviors.

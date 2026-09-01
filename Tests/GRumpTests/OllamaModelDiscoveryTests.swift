@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Pure-logic tests for the Ollama discovery pieces — no live server needed.
 final class OllamaModelDiscoveryTests: XCTestCase {

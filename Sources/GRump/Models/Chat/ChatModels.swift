@@ -93,6 +93,20 @@ struct Message: Identifiable, Codable, Equatable, Sendable {
         case system
         case tool
     }
+
+    /// Harness guidance is intentionally encoded as a user-role message for
+    /// provider compatibility, but it must never be presented as user-authored.
+    var isInternalAgentNotice: Bool {
+        role == .user && content.hasPrefix("[Agent notice]")
+    }
+
+    /// Assistant messages whose only purpose is to carry tool-call protocol
+    /// state are represented by their following tool-result rows in the UI.
+    var isProtocolOnlyAssistantEnvelope: Bool {
+        role == .assistant
+            && content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && toolCalls?.isEmpty == false
+    }
 }
 
 struct ToolCall: Codable, Equatable, Sendable {

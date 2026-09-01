@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the Build mode prompt — verifies it forces tool usage and prevents
 /// question-asking behavior.

@@ -5,7 +5,7 @@ JOBS := $(shell sysctl -n hw.ncpu)
 # ── Development ───────────────────────────────────────
 
 run: build-debug ## Build debug and run (terminal only — bare binary can't take keyboard focus when launched from scripts; prefer run-app)
-	.build/debug/GRump
+	.build/debug/G-Rump
 
 run-app: ## Build optimized native release, assemble signed dev .app, launch via LaunchServices
 	./scripts/dev-app.sh

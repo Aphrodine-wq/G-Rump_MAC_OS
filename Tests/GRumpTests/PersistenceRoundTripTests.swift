@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for conversation persistence (save/load round-trip).
 /// Validates that conversations survive a write-to-disk and read-back cycle

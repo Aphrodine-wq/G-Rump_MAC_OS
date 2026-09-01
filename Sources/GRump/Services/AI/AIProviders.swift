@@ -92,6 +92,19 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Conventional environment variables accepted as an opt-in credential
+    /// source. Values are copied directly to the macOS Keychain only after the
+    /// user selects that provider; secrets are never logged or displayed.
+    var environmentCredentialNames: [String] {
+        switch self {
+        case .anthropic: return ["ANTHROPIC_API_KEY"]
+        case .openAI: return ["OPENAI_API_KEY"]
+        case .google: return ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
+        case .openRouter: return ["OPENROUTER_API_KEY"]
+        case .ollama: return []
+        }
+    }
+
     /// Where a user creates an API key for this provider ("Get a key" links).
     /// Ollama has no keys — link to the install page instead of nil so the
     /// onboarding card still has a useful destination.
@@ -278,9 +291,8 @@ final class AIModelRegistry: @unchecked Sendable {
     }
 
     func isProviderConfigured(_ provider: AIProvider) -> Bool {
-        guard let config = providerConfigs[provider] else { return false }
         if !provider.requiresAPIKey { return true }
-        return !(config.apiKey?.isEmpty ?? true)
+        return !(apiKey(for: provider)?.isEmpty ?? true)
     }
 
     // MARK: - API Keys (Keychain is the only persistence)
@@ -299,6 +311,21 @@ final class AIModelRegistry: @unchecked Sendable {
         var config = providerConfigs[provider] ?? ProviderConfiguration(provider: provider)
         config.apiKey = trimmed.isEmpty ? nil : trimmed
         providerConfigs[provider] = config
+    }
+
+    /// Imports a conventional provider environment variable without exposing
+    /// its value to UI state or logs. Returns the variable name, never the key.
+    @discardableResult
+    func importEnvironmentCredentialIfAvailable(for provider: AIProvider) -> String? {
+        guard provider.requiresAPIKey else { return nil }
+        let environment = ProcessInfo.processInfo.environment
+        for name in provider.environmentCredentialNames {
+            guard let value = environment[name]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else { continue }
+            setAPIKey(value, for: provider)
+            return name
+        }
+        return nil
     }
 
     // MARK: - Model Loading (catalog in AIModelCatalog.swift)

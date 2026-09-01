@@ -67,6 +67,7 @@ class MultiProviderAIService: ObservableObject {
 
     func selectProvider(_ provider: AIProvider) {
         currentProvider = provider
+        ensureProviderConnection(provider)
         refreshModels()
         saveConfiguration()
         if provider == .ollama {
@@ -111,6 +112,23 @@ class MultiProviderAIService: ObservableObject {
         if provider == currentProvider {
             updateConfigurationStatus()
         }
+    }
+
+    /// Resolves credentials in a predictable order: existing Keychain entry,
+    /// conventional environment variable, then provider-specific keyless mode.
+    /// This deliberately does not inspect or reuse another application's tokens.
+    @discardableResult
+    func ensureProviderConnection(_ provider: AIProvider? = nil) -> Bool {
+        let target = provider ?? currentProvider
+        if modelRegistry.isProviderConfigured(target) {
+            if target == currentProvider { updateConfigurationStatus() }
+            return true
+        }
+
+        _ = modelRegistry.importEnvironmentCredentialIfAvailable(for: target)
+        let connected = modelRegistry.isProviderConfigured(target)
+        if target == currentProvider { updateConfigurationStatus() }
+        return connected
     }
 
     // MARK: - Chat Completions

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for conversation CRUD operations in `ChatViewModel+Messages`.
 /// Covers create, delete, rename, duplicate, select, and sync behaviors.

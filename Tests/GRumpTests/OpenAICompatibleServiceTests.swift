@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Unit tests for the default (`.qwen`) configuration of
 /// `OpenAICompatibleService`, which targets Alibaba DashScope's

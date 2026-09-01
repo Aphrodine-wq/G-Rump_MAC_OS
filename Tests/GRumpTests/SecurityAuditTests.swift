@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Security-focused tests verifying input sanitization, command injection prevention,
 /// path traversal protection, API key handling, and credential isolation.

@@ -121,12 +121,12 @@ fi
 # ── Step 2: Build universal release binary ────────────
 # Resolve the binary output path dynamically via --show-bin-path
 # so we don't hardcode a path that may differ across Swift versions.
-BUILD_FLAGS="-c release --arch arm64 --arch x86_64 -j $JOBS"
+BUILD_FLAGS="-c release --arch arm64 --arch x86_64 -j $JOBS --product G-Rump"
 
 if $SKIP_BUILD; then
     echo "▸ Skipping build (--skip-build)..."
     BIN_DIR=$(swift build $BUILD_FLAGS --show-bin-path 2>/dev/null)
-    BINARY="$BIN_DIR/GRump"
+    BINARY="$BIN_DIR/G-Rump"
     if [ ! -f "$BINARY" ]; then
         echo "✗ No existing binary found at $BINARY"
         echo "  Run without --skip-build first."
@@ -145,7 +145,7 @@ else
     fi
 
     BIN_DIR=$(swift build $BUILD_FLAGS --show-bin-path 2>/dev/null)
-    BINARY="$BIN_DIR/GRump"
+    BINARY="$BIN_DIR/G-Rump"
 
     END_TIME=$(date +%s)
     BUILD_TIME=$((END_TIME - START_TIME))
@@ -190,10 +190,10 @@ echo "  → Info.plist"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
 # Copy bundled resources (skills, privacy manifest, etc.)
-RESOURCE_BUNDLE="$BIN_DIR/GRump_GRump.bundle"
+RESOURCE_BUNDLE="$BIN_DIR/GRump_GRumpAppCore.bundle"
 if [ -d "$RESOURCE_BUNDLE" ]; then
     cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
-    SKILL_COUNT=$(find "$APP_BUNDLE/Contents/Resources/GRump_GRump.bundle" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    SKILL_COUNT=$(find "$APP_BUNDLE/Contents/Resources/GRump_GRumpAppCore.bundle" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
     echo "  → Resource bundle ($SKILL_COUNT skills)"
 else
     echo "⚠ Warning: SPM resource bundle not found at $RESOURCE_BUNDLE"

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 final class AIProvidersTests: XCTestCase {
 
@@ -69,6 +69,44 @@ final class AIProvidersTests: XCTestCase {
     func testKeychainAccountsUnique() {
         let accounts = AIProvider.allCases.map(\.keychainAccount)
         XCTAssertEqual(accounts.count, Set(accounts).count)
+    }
+
+    func testEnvironmentCredentialMappings() {
+        XCTAssertEqual(AIProvider.anthropic.environmentCredentialNames, ["ANTHROPIC_API_KEY"])
+        XCTAssertEqual(AIProvider.openAI.environmentCredentialNames, ["OPENAI_API_KEY"])
+        XCTAssertEqual(AIProvider.google.environmentCredentialNames, ["GEMINI_API_KEY", "GOOGLE_API_KEY"])
+        XCTAssertEqual(AIProvider.openRouter.environmentCredentialNames, ["OPENROUTER_API_KEY"])
+        XCTAssertTrue(AIProvider.ollama.environmentCredentialNames.isEmpty)
+    }
+
+    func testOnlyKeyedProvidersAdvertiseCredentialVariables() {
+        for provider in AIProvider.allCases {
+            XCTAssertEqual(provider.environmentCredentialNames.isEmpty, !provider.requiresAPIKey)
+        }
+    }
+
+    func testOpenRouterPKCEChallengeMatchesRFCVector() {
+        let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        XCTAssertEqual(
+            OpenRouterOAuthService.makeCodeChallenge(verifier: verifier),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        )
+    }
+
+    func testOpenRouterAuthorizationURLUsesLoopbackAndS256() throws {
+        let callback = try XCTUnwrap(URL(string: "http://127.0.0.1:51423/oauth/openrouter/nonce"))
+        let url = try OpenRouterOAuthService.makeAuthorizationURL(
+            callbackURL: callback,
+            codeChallenge: "challenge"
+        )
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.scheme, "https")
+        XCTAssertEqual(components.host, "openrouter.ai")
+        XCTAssertEqual(components.path, "/auth")
+        let items = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+        XCTAssertEqual(items["callback_url"]!, callback.absoluteString)
+        XCTAssertEqual(items["code_challenge"]!, "challenge")
+        XCTAssertEqual(items["code_challenge_method"]!, "S256")
     }
 
     func testIconAndPlaceholderPresent() {

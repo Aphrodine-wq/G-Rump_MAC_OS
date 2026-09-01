@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for the CodeBlockView collapse/expand logic.
 /// Validates thresholds, visible line counts, and expand/collapse behavior.

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Integration-level tests validating the full Chat Input pipeline:
 /// text entry → canSend → send → state update → attachment lifecycle.

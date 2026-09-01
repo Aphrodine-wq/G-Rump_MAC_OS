@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Covers the context-keeper work: pinned task framing + orphan-tool guard
 /// in truncateMessages, the pure compaction cut-point, and buildAPIMessages'

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Comprehensive tests for XMLToolCallParser — validates all 3 XML format patterns,
 /// edge cases, stripping behavior, and argument serialization.

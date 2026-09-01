@@ -22,8 +22,12 @@ extension ChatViewModel {
     func sendMessage() {
         let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if !isAIProviderConfigured && apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-            errorMessage = "No provider configured. Open Settings (\u{2318},) to add an API key."
+        let connected = aiService.ensureProviderConnection(currentAIProvider)
+        apiKey = aiService.modelRegistry.apiKey(for: currentAIProvider) ?? ""
+        if !connected {
+            let environmentHint = currentAIProvider.environmentCredentialNames.first
+                .map { " or set \($0) before launching G-Rump" } ?? ""
+            errorMessage = "\(currentAIProvider.displayName) is not connected. Open Settings (\u{2318},) to add an API key\(environmentHint)."
             return
         }
 

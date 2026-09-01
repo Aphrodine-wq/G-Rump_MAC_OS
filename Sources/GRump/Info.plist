@@ -17,7 +17,7 @@
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.1.0</string>
+	<string>2.2.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
@@ -36,6 +36,10 @@
 	<string>Copyright © 2026 G-Rump. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>G-Rump uses speech recognition only when you choose voice input.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>G-Rump uses the microphone only while voice input is recording.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

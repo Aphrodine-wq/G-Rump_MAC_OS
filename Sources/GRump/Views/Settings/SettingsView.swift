@@ -62,6 +62,7 @@ struct SettingsView: View {
     @State var providerAPIKeys: [String: String] = [:]
     @State var providerBaseURLs: [String: String] = [:]
     @State var providerKeyValidation: [String: KeyValidationState] = [:]
+    @StateObject var openRouterOAuth = OpenRouterOAuthService()
 
     // Tools state
     @State var toolsDenylist: Set<String> = []

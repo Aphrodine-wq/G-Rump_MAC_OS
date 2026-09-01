@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import GRump
+@testable import GRumpAppCore
 
 // NOTE: Primary DesignToken tests are in DesignTokenTests.swift.
 // This file adds supplementary coverage for Typography and exact values.

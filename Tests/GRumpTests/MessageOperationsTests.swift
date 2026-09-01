@@ -1,5 +1,5 @@
 import XCTest
-@testable import GRump
+@testable import GRumpAppCore
 
 /// Tests for message-level operations in `ChatViewModel+Messages`.
 /// Covers undo send, edit user message, threading, and branching operations.

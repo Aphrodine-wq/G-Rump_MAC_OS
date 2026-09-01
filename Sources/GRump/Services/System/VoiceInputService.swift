@@ -20,6 +20,11 @@ class VoiceInputService: ObservableObject {
     }
 
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
+        guard hasRequiredUsageDescriptions else {
+            errorMessage = "Voice input is unavailable because the host is missing speech and microphone usage descriptions."
+            completion(false)
+            return
+        }
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 switch status {
@@ -43,6 +48,10 @@ class VoiceInputService: ObservableObject {
     }
 
     func startRecording() {
+        guard hasRequiredUsageDescriptions else {
+            errorMessage = "Voice input is unavailable because the host is missing speech and microphone usage descriptions."
+            return
+        }
         guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
             errorMessage = "Speech recognizer not available for current locale."
             return
@@ -126,6 +135,15 @@ class VoiceInputService: ObservableObject {
                 self?.startRecording()
             }
         }
+    }
+
+    /// TCC terminates a process that requests either capability without these
+    /// declarations. Test runners and library hosts commonly have no app plist,
+    /// so fail safely before crossing into Speech/AVFoundation.
+    private var hasRequiredUsageDescriptions: Bool {
+        let info = Bundle.main.infoDictionary ?? [:]
+        return (info["NSSpeechRecognitionUsageDescription"] as? String)?.isEmpty == false
+            && (info["NSMicrophoneUsageDescription"] as? String)?.isEmpty == false
     }
 }
 #endif
