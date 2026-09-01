@@ -130,7 +130,7 @@ final class OpenAICompatibleServiceTransportTests: XCTestCase {
         )
         let service = OpenAICompatibleService(configuration: config)
         let messages = [Message(role: .user, content: "Test")]
-        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "gpt-5.2", maxTokens: 4096, stream: true)
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "gpt-5.6-sol", maxTokens: 4096, stream: true)
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["max_completion_tokens"] as? Int, 4096)
@@ -141,7 +141,7 @@ final class OpenAICompatibleServiceTransportTests: XCTestCase {
     func testOpenAIConfigUsesCompletionTokensField() throws {
         let service = OpenAICompatibleService(configuration: .openAI)
         let messages = [Message(role: .user, content: "Test")]
-        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "gpt-5.2", maxTokens: 2048, stream: true)
+        let request = try service.buildRequest(messages: messages, apiKey: "key", model: "gpt-5.6-sol", maxTokens: 2048, stream: true)
         XCTAssertEqual(request.url?.host, "api.openai.com")
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])

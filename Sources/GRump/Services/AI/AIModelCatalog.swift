@@ -3,14 +3,13 @@ import Foundation
 // MARK: - Default Model Catalog
 //
 // Current-generation models for the four first-class providers. Anthropic is
-// the flagship provider (Claude Opus 4.8 is the app default); OpenRouter
+// the flagship provider (Claude Opus 5 is the app default); OpenRouter
 // carries passthrough routes, including the legacy Qwen lane. `id` ==
 // `modelID` == the exact wire id. This file is deliberately a single data
 // table — when a vendor ships new models, edit here only.
 //
-// Pricing is USD per 1K tokens (Anthropic verified 2026-07; others render "—"
-// until verified). gpt-5.3-codex serves both chat-completions and Responses
-// per OpenAI's model page — live round-trip pending a key (Session A P5).
+// Pricing is USD per 1K tokens (Anthropic + OpenAI verified 2026-08 against
+// vendor docs; Google/OpenRouter render "—" until verified).
 
 extension AIModelRegistry {
 
@@ -37,10 +36,10 @@ extension AIModelRegistry {
         return [
             // MARK: Anthropic
             EnhancedAIModel(
-                id: "claude-opus-4-8",
+                id: "claude-opus-5",
                 provider: .anthropic,
-                modelID: "claude-opus-4-8",
-                displayName: "Claude Opus 4.8",
+                modelID: "claude-opus-5",
+                displayName: "Claude Opus 5",
                 description: "Default — long-horizon agentic coding and the strongest all-rounder",
                 contextWindow: 1_000_000,
                 maxOutput: 128_000,
@@ -65,12 +64,12 @@ extension AIModelRegistry {
                 provider: .anthropic,
                 modelID: "claude-sonnet-5",
                 displayName: "Claude Sonnet 5",
-                description: "Near-Opus coding quality at a third of the price",
+                description: "Near-Opus coding quality at a fraction of the price",
                 contextWindow: 1_000_000,
                 maxOutput: 128_000,
                 requiresPaidTier: false,
                 capabilities: full,
-                pricing: ModelPricing(inputPricePer1K: 0.003, outputPricePer1K: 0.015, currency: "USD")
+                pricing: ModelPricing(inputPricePer1K: 0.002, outputPricePer1K: 0.010, currency: "USD")
             ),
             EnhancedAIModel(
                 id: "claude-haiku-4-5",
@@ -87,36 +86,36 @@ extension AIModelRegistry {
 
             // MARK: OpenAI
             EnhancedAIModel(
-                id: "gpt-5.2",
+                id: "gpt-5.6-sol",
                 provider: .openAI,
-                modelID: "gpt-5.2",
-                displayName: "GPT-5.2",
-                description: "OpenAI's general flagship — reasoning and broad tasks",
-                contextWindow: 400_000,
+                modelID: "gpt-5.6-sol",
+                displayName: "GPT-5.6 Sol",
+                description: "OpenAI's flagship — complex professional and agentic work",
+                contextWindow: 1_050_000,
                 maxOutput: 128_000,
                 requiresPaidTier: false,
                 capabilities: full,
-                pricing: nil
+                pricing: ModelPricing(inputPricePer1K: 0.004, outputPricePer1K: 0.020, currency: "USD")
             ),
             EnhancedAIModel(
-                id: "gpt-5.3-codex",
+                id: "gpt-5.6-terra",
                 provider: .openAI,
-                modelID: "gpt-5.3-codex",
-                displayName: "GPT-5.3 Codex",
-                description: "OpenAI's agentic coding model",
-                contextWindow: 400_000,
+                modelID: "gpt-5.6-terra",
+                displayName: "GPT-5.6 Terra",
+                description: "Balanced intelligence and cost",
+                contextWindow: 1_050_000,
                 maxOutput: 128_000,
                 requiresPaidTier: false,
                 capabilities: full,
-                pricing: nil
+                pricing: ModelPricing(inputPricePer1K: 0.002, outputPricePer1K: 0.012, currency: "USD")
             ),
 
             // MARK: Google
             EnhancedAIModel(
-                id: "gemini-3-pro",
+                id: "gemini-3.1-pro-preview",
                 provider: .google,
-                modelID: "gemini-3-pro",
-                displayName: "Gemini 3 Pro",
+                modelID: "gemini-3.1-pro-preview",
+                displayName: "Gemini 3.1 Pro",
                 description: "Google's flagship — strong multimodal reasoning",
                 contextWindow: 1_000_000,
                 maxOutput: 65_536,
@@ -125,11 +124,11 @@ extension AIModelRegistry {
                 pricing: nil
             ),
             EnhancedAIModel(
-                id: "gemini-2.5-flash",
+                id: "gemini-3.7-flash",
                 provider: .google,
-                modelID: "gemini-2.5-flash",
-                displayName: "Gemini 2.5 Flash",
-                description: "Fast and cheap Gemini for high-volume work",
+                modelID: "gemini-3.7-flash",
+                displayName: "Gemini 3.7 Flash",
+                description: "Fast Gemini for agentic workflows and high-volume work",
                 contextWindow: 1_000_000,
                 maxOutput: 65_536,
                 requiresPaidTier: false,
@@ -151,23 +150,23 @@ extension AIModelRegistry {
                 pricing: nil
             ),
             EnhancedAIModel(
-                id: "openai/gpt-5.3-codex",
+                id: "openai/gpt-5.6-sol",
                 provider: .openRouter,
-                modelID: "openai/gpt-5.3-codex",
-                displayName: "GPT-5.3 Codex (OpenRouter)",
-                description: "Codex routed through OpenRouter",
-                contextWindow: 400_000,
+                modelID: "openai/gpt-5.6-sol",
+                displayName: "GPT-5.6 Sol (OpenRouter)",
+                description: "GPT-5.6 Sol routed through OpenRouter",
+                contextWindow: 1_050_000,
                 maxOutput: 128_000,
                 requiresPaidTier: false,
                 capabilities: full,
                 pricing: nil
             ),
             EnhancedAIModel(
-                id: "google/gemini-3-pro",
+                id: "google/gemini-3.1-pro-preview",
                 provider: .openRouter,
-                modelID: "google/gemini-3-pro",
-                displayName: "Gemini 3 Pro (OpenRouter)",
-                description: "Gemini 3 Pro routed through OpenRouter",
+                modelID: "google/gemini-3.1-pro-preview",
+                displayName: "Gemini 3.1 Pro (OpenRouter)",
+                description: "Gemini 3.1 Pro routed through OpenRouter",
                 contextWindow: 1_000_000,
                 maxOutput: 65_536,
                 requiresPaidTier: false,

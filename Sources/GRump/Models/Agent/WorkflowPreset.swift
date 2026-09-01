@@ -46,7 +46,7 @@ enum WorkflowPresetsStorage {
         [
             WorkflowPreset(
                 name: "Refactor mode",
-                modelRawValue: "claude-opus-4-8",
+                modelRawValue: "claude-opus-5",
                 systemPrompt: GRumpDefaults.defaultSystemPrompt + "\n\nFocus on refactoring: improve structure, reduce duplication, and maintain behavior. Prefer edit_file over write_file. Run tests after changes."
             ),
             WorkflowPreset(
@@ -56,7 +56,7 @@ enum WorkflowPresetsStorage {
             ),
             WorkflowPreset(
                 name: "Read-only research",
-                modelRawValue: "claude-opus-4-8",
+                modelRawValue: "claude-opus-5",
                 systemPrompt: GRumpDefaults.defaultSystemPrompt + "\n\nRead-only mode: only use read_file, list_directory, grep_search, web_search, read_url. Do not modify files or run commands.",
                 toolAllowlist: ["read_file", "batch_read_files", "list_directory", "tree_view", "search_files", "grep_search", "file_info", "path_exists", "count_lines", "view_code_outline", "web_search", "read_url", "clipboard_read", "get_env"]
             ),

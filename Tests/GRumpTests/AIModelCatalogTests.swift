@@ -9,14 +9,14 @@ final class AIModelCatalogTests: XCTestCase {
 
     func testDefaultModelIsOpus48() {
         let model = registry.defaultModel()
-        XCTAssertEqual(model.id, "claude-opus-4-8")
+        XCTAssertEqual(model.id, "claude-opus-5")
         XCTAssertEqual(model.provider, .anthropic)
     }
 
     func testPerProviderDefaults() {
-        XCTAssertEqual(registry.defaultModel(for: .anthropic)?.id, "claude-opus-4-8")
-        XCTAssertEqual(registry.defaultModel(for: .openAI)?.id, "gpt-5.2")
-        XCTAssertEqual(registry.defaultModel(for: .google)?.id, "gemini-3-pro")
+        XCTAssertEqual(registry.defaultModel(for: .anthropic)?.id, "claude-opus-5")
+        XCTAssertEqual(registry.defaultModel(for: .openAI)?.id, "gpt-5.6-sol")
+        XCTAssertEqual(registry.defaultModel(for: .google)?.id, "gemini-3.1-pro-preview")
         XCTAssertEqual(registry.defaultModel(for: .openRouter)?.id, "anthropic/claude-sonnet-5")
     }
 
@@ -31,23 +31,23 @@ final class AIModelCatalogTests: XCTestCase {
 
     func testAnthropicLineup() {
         let ids = registry.getModels(for: .anthropic).map(\.id)
-        XCTAssertEqual(Set(ids), ["claude-opus-4-8", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5"])
+        XCTAssertEqual(Set(ids), ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5"])
     }
 
     func testOpenAILineup() {
         let ids = registry.getModels(for: .openAI).map(\.id)
-        XCTAssertEqual(Set(ids), ["gpt-5.2", "gpt-5.3-codex"])
+        XCTAssertEqual(Set(ids), ["gpt-5.6-sol", "gpt-5.6-terra"])
     }
 
     func testGoogleLineup() {
         let ids = registry.getModels(for: .google).map(\.id)
-        XCTAssertEqual(Set(ids), ["gemini-3-pro", "gemini-2.5-flash"])
+        XCTAssertEqual(Set(ids), ["gemini-3.1-pro-preview", "gemini-3.7-flash"])
     }
 
     func testOpenRouterLineupIncludesLegacyQwenRoute() {
         let ids = registry.getModels(for: .openRouter).map(\.id)
-        XCTAssertEqual(Set(ids), ["anthropic/claude-sonnet-5", "openai/gpt-5.3-codex",
-                                  "google/gemini-3-pro", "qwen/qwen3-coder"])
+        XCTAssertEqual(Set(ids), ["anthropic/claude-sonnet-5", "openai/gpt-5.6-sol",
+                                  "google/gemini-3.1-pro-preview", "qwen/qwen3-coder"])
     }
 
     func testEveryCloudProviderHasModels() {
@@ -72,7 +72,7 @@ final class AIModelCatalogTests: XCTestCase {
 
     func testAnthropicContextAndOutputCaps() {
         // 1M context / 128K output across the tier, except Haiku (200K / 64K).
-        for id in ["claude-opus-4-8", "claude-fable-5", "claude-sonnet-5"] {
+        for id in ["claude-opus-5", "claude-fable-5", "claude-sonnet-5"] {
             let model = registry.getModel(by: id)
             XCTAssertEqual(model?.contextWindow, 1_000_000, "\(id) context window")
             XCTAssertEqual(model?.maxOutput, 128_000, "\(id) max output")
@@ -83,11 +83,11 @@ final class AIModelCatalogTests: XCTestCase {
     }
 
     func testAnthropicPricingPresent() {
-        for id in ["claude-opus-4-8", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5"] {
+        for id in ["claude-opus-5", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5"] {
             XCTAssertNotNil(registry.getModel(by: id)?.pricing, "\(id) missing pricing")
         }
         // Opus 4.8: $5 in / $25 out per MTok → 0.005 / 0.025 per 1K.
-        let opus = registry.getModel(by: "claude-opus-4-8")?.pricing
+        let opus = registry.getModel(by: "claude-opus-5")?.pricing
         XCTAssertEqual(opus?.inputPricePer1K, 0.005)
         XCTAssertEqual(opus?.outputPricePer1K, 0.025)
     }

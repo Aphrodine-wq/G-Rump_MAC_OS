@@ -29,7 +29,7 @@ final class ModelRouterTests: XCTestCase {
     func testHeavyTasksRouteToOpus() {
         for taskType in [TaskType.reasoning, .planning, .debugging, .codeGen, .testing] {
             let model = ModelRouter.route(taskType: taskType, fallback: fallback)
-            XCTAssertEqual(model.id, "claude-opus-4-8", "\(taskType.rawValue) should lead with Opus")
+            XCTAssertEqual(model.id, "claude-opus-5", "\(taskType.rawValue) should lead with Opus")
         }
     }
 

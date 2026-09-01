@@ -104,10 +104,10 @@ final class ProviderMigrationTests: XCTestCase {
 
     func testCurrentProviderAndModelPassThrough() {
         defaults.set("openai", forKey: "CurrentAIProvider")
-        defaults.set("gpt-5.2", forKey: "CurrentAIModel")
+        defaults.set("gpt-5.6-sol", forKey: "CurrentAIModel")
         runMigration()
         XCTAssertEqual(defaults.string(forKey: "CurrentAIProvider"), "openai")
-        XCTAssertEqual(defaults.string(forKey: "CurrentAIModel"), "gpt-5.2")
+        XCTAssertEqual(defaults.string(forKey: "CurrentAIModel"), "gpt-5.6-sol")
     }
 
     // MARK: - Model ID mapping rules
@@ -121,13 +121,43 @@ final class ProviderMigrationTests: XCTestCase {
         XCTAssertEqual(ModelIDMigration.map("qwen-plus"), "claude-sonnet-5")
         XCTAssertEqual(ModelIDMigration.map("qwen-coder-plus"), "claude-sonnet-5")
         // Everything else → Opus
-        XCTAssertEqual(ModelIDMigration.map("qwen-max"), "claude-opus-4-8")
-        XCTAssertEqual(ModelIDMigration.map("mystery-model"), "claude-opus-4-8")
+        XCTAssertEqual(ModelIDMigration.map("qwen-max"), "claude-opus-5")
+        XCTAssertEqual(ModelIDMigration.map("mystery-model"), "claude-opus-5")
         // Current ids pass through untouched
         XCTAssertEqual(ModelIDMigration.map("claude-fable-5"), "claude-fable-5")
         XCTAssertEqual(ModelIDMigration.map("claude-haiku-4-5"), "claude-haiku-4-5")
-        XCTAssertEqual(ModelIDMigration.map("gpt-5.3-codex"), "gpt-5.3-codex")
-        XCTAssertEqual(ModelIDMigration.map("gemini-2.5-flash"), "gemini-2.5-flash")
+        XCTAssertEqual(ModelIDMigration.map("gpt-5.6-sol"), "gpt-5.6-sol")
+        XCTAssertEqual(ModelIDMigration.map("gemini-3.7-flash"), "gemini-3.7-flash")
         XCTAssertEqual(ModelIDMigration.map("qwen/qwen3-coder"), "qwen/qwen3-coder")
+    }
+
+    func testRetiredIDsMapToSuccessorsBeforePassThrough() {
+        // These all match the current-id prefix rule, so only the retirement
+        // table keeps them off a model the catalog can no longer resolve.
+        XCTAssertEqual(ModelIDMigration.map("claude-opus-4-8"), "claude-opus-5")
+        XCTAssertEqual(ModelIDMigration.map("gpt-5.2"), "gpt-5.6-sol")
+        XCTAssertEqual(ModelIDMigration.map("gemini-3-pro"), "gemini-3.1-pro-preview")
+        XCTAssertEqual(ModelIDMigration.map("google/gemini-3-pro"), "google/gemini-3.1-pro-preview")
+    }
+
+    // MARK: - Model retirement pass
+
+    func testRetirementPassRepointsSelectionAndIsIdempotent() {
+        defaults.set("claude-opus-4-8", forKey: "CurrentAIModel")
+
+        ProviderMigration.runModelRetirementIfNeeded(defaults: defaults)
+        XCTAssertEqual(defaults.string(forKey: "CurrentAIModel"), "claude-opus-5")
+        XCTAssertTrue(defaults.bool(forKey: ProviderMigration.retirementFlagKey))
+
+        // A later hand-pick of a retired id survives — the pass is one-shot.
+        defaults.set("claude-opus-4-8", forKey: "CurrentAIModel")
+        ProviderMigration.runModelRetirementIfNeeded(defaults: defaults)
+        XCTAssertEqual(defaults.string(forKey: "CurrentAIModel"), "claude-opus-4-8")
+    }
+
+    func testRetirementPassLeavesCurrentSelectionAlone() {
+        defaults.set("claude-sonnet-5", forKey: "CurrentAIModel")
+        ProviderMigration.runModelRetirementIfNeeded(defaults: defaults)
+        XCTAssertEqual(defaults.string(forKey: "CurrentAIModel"), "claude-sonnet-5")
     }
 }

@@ -12,14 +12,14 @@ final class GoogleRequestBuilderTests: XCTestCase {
     func testRequestURLUsesSSEStreamingEndpoint() throws {
         let request = try MultiProviderAIService.buildGoogleRequest(
             messages: [Message(role: .user, content: "hi")],
-            model: "gemini-3-pro",
+            model: "gemini-3.1-pro-preview",
             apiKey: "AIza-test",
             baseURL: "https://generativelanguage.googleapis.com/v1beta",
             maxOutputTokens: 65_536,
             tools: nil
         )
         let url = request.url?.absoluteString ?? ""
-        XCTAssertTrue(url.contains("/models/gemini-3-pro:streamGenerateContent"))
+        XCTAssertTrue(url.contains("/models/gemini-3.1-pro-preview:streamGenerateContent"))
         XCTAssertTrue(url.contains("alt=sse"))
         XCTAssertTrue(url.contains("key=AIza-test"))
     }

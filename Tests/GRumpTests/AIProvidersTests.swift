@@ -168,7 +168,7 @@ final class AIProvidersTests: XCTestCase {
 
     func testEnhancedModelEquality() {
         let a = EnhancedAIModel(
-            id: "test-1", provider: .anthropic, modelID: "claude-opus-4-8", displayName: "Claude Opus 4.8",
+            id: "test-1", provider: .anthropic, modelID: "claude-opus-5", displayName: "Claude Opus 5",
             description: "Test", contextWindow: 1_000_000, maxOutput: 128_000,
             requiresPaidTier: false, capabilities: .default, pricing: nil
         )

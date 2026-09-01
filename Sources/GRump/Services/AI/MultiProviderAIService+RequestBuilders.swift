@@ -139,8 +139,8 @@ extension MultiProviderAIService {
             "messages": apiMessages
         ]
         // Adaptive thinking is the recommended mode for coding/agentic work.
-        // Opus 4.8 runs with thinking OFF when the param is omitted; Fable 5
-        // accepts an explicit adaptive (thinking is always on there). Models
+        // Opus 4.8 runs with thinking OFF when the param is omitted; Opus 5 and
+        // Fable 5 accept an explicit adaptive (Fable always thinks). Models
         // outside the gate (Haiku, older) reject the parameter.
         if anthropicSupportsAdaptiveThinking(model) {
             body["thinking"] = ["type": "adaptive"]
@@ -170,6 +170,7 @@ extension MultiProviderAIService {
     nonisolated static func anthropicSupportsAdaptiveThinking(_ model: String) -> Bool {
         let id = model.lowercased()
         if id.contains("fable") || id.contains("mythos") { return true }
+        if id.contains("opus-5") { return true }
         if id.contains("opus-4-6") || id.contains("opus-4-7") || id.contains("opus-4-8") { return true }
         if id.contains("sonnet-4-6") || id.contains("sonnet-5") { return true }
         return false

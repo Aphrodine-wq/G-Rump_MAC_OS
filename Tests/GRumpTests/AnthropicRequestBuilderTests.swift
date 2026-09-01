@@ -21,7 +21,7 @@ final class AnthropicRequestBuilderTests: XCTestCase {
     func testRequestHeadersAndURL() throws {
         let request = try MultiProviderAIService.buildAnthropicRequest(
             messages: [Message(role: .user, content: "hi")],
-            model: "claude-opus-4-8",
+            model: "claude-opus-5",
             apiKey: "sk-ant-test",
             baseURL: "https://api.anthropic.com/v1",
             maxTokens: 128_000,
@@ -41,7 +41,7 @@ final class AnthropicRequestBuilderTests: XCTestCase {
     private func body(messages: [Message], tools: [[String: Any]]? = nil,
                       maxTokens: Int = 64_000) -> [String: Any] {
         MultiProviderAIService.anthropicBody(
-            messages: messages, model: "claude-opus-4-8",
+            messages: messages, model: "claude-opus-5",
             maxTokens: maxTokens, stream: true, tools: tools)
     }
 
@@ -145,7 +145,7 @@ final class AnthropicRequestBuilderTests: XCTestCase {
 
     private func cachedBody(messages: [Message], tools: [[String: Any]]? = nil) -> [String: Any] {
         MultiProviderAIService.anthropicBody(
-            messages: messages, model: "claude-opus-4-8",
+            messages: messages, model: "claude-opus-5",
             maxTokens: 64_000, stream: true, tools: tools, enableCaching: true)
     }
 
@@ -275,7 +275,7 @@ final class AnthropicRequestBuilderTests: XCTestCase {
     // MARK: - Adaptive thinking parameter
 
     func testAdaptiveThinkingSentForSupportedModels() {
-        for model in ["claude-opus-4-8", "claude-fable-5", "claude-sonnet-5"] {
+        for model in ["claude-opus-5", "claude-fable-5", "claude-sonnet-5"] {
             let result = MultiProviderAIService.anthropicBody(
                 messages: [Message(role: .user, content: "hi")], model: model,
                 maxTokens: 64_000, stream: true, tools: nil)
@@ -297,12 +297,12 @@ final class AnthropicRequestBuilderTests: XCTestCase {
     func testAdaptiveThinkingGateMatrix() {
         XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-fable-5"))
         XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-mythos-5"))
-        XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-opus-4-8"))
+        XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-opus-5"))
         XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-opus-4-7"))
         XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-sonnet-4-6"))
         XCTAssertTrue(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-sonnet-5"))
         XCTAssertFalse(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-haiku-4-5"))
         XCTAssertFalse(MultiProviderAIService.anthropicSupportsAdaptiveThinking("claude-sonnet-4-5"))
-        XCTAssertFalse(MultiProviderAIService.anthropicSupportsAdaptiveThinking("gpt-5.2"))
+        XCTAssertFalse(MultiProviderAIService.anthropicSupportsAdaptiveThinking("gpt-5.6-sol"))
     }
 }

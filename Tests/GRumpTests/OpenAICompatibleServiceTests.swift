@@ -30,7 +30,7 @@ final class OpenAICompatibleServiceTests: XCTestCase {
         let request = try service.buildRequest(
             messages: sampleMessages(),
             apiKey: "sk-test-key",
-            model: "gpt-5.2",
+            model: "gpt-5.6-sol",
             maxTokens: 65_536,
             stream: true,
             tools: nil

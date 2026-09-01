@@ -92,7 +92,7 @@ final class CompletionCheckTests: XCTestCase {
     // MARK: - ProjectConfig verification fields
 
     func testProjectConfigDecodesWithoutNewFields() throws {
-        let legacy = #"{"model": "claude-opus-4-8"}"#.data(using: .utf8)!
+        let legacy = #"{"model": "claude-opus-5"}"#.data(using: .utf8)!
         let cfg = try JSONDecoder().decode(ProjectConfig.self, from: legacy)
         XCTAssertNil(cfg.autoVerify)
         XCTAssertNil(cfg.buildCommand)

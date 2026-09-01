@@ -96,7 +96,7 @@ struct GRumpCLI {
         case "anthropic":
             configuration = .init(api: .anthropic,
                                   endpoint: try endpoint(baseURL ?? "https://api.anthropic.com/v1/messages"),
-                                  model: model ?? "claude-opus-4-8", apiKey: environment["ANTHROPIC_API_KEY"])
+                                  model: model ?? "claude-opus-5", apiKey: environment["ANTHROPIC_API_KEY"])
         case "openai":
             guard let model else { throw CLIError("Set --model or GRUMP_MODEL for OpenAI") }
             configuration = .init(api: .openAICompatible,

@@ -69,7 +69,7 @@ enum ModelRouter {
     // unpredictable across arbitrary local models, so they are used only
     // when explicitly selected as the current model.
 
-    private static let opus = "claude-opus-4-8"
+    private static let opus = "claude-opus-5"
     private static let sonnet = "claude-sonnet-5"
     private static let haiku = "claude-haiku-4-5"
 

@@ -231,6 +231,7 @@ final class AIModelRegistry: @unchecked Sendable {
         // guaranteed to precede every read of provider/model defaults —
         // whichever subsystem touches the registry first pays for it.
         ProviderMigration.runIfNeeded()
+        ProviderMigration.runModelRetirementIfNeeded()
         loadDefaultModels()
         loadProviderConfigurations()
     }
@@ -250,15 +251,15 @@ final class AIModelRegistry: @unchecked Sendable {
         return models.first { $0.id == id }
     }
 
-    /// The app-wide default model: Claude Opus 4.8. Non-optional — the
+    /// The app-wide default model: Claude Opus 5. Non-optional — the
     /// bundled catalog guarantees an entry; the synthetic tail exists only so
     /// a future empty-catalog bug degrades instead of crashing.
     func defaultModel() -> EnhancedAIModel {
-        if let opus = getModel(by: "claude-opus-4-8") { return opus }
+        if let opus = getModel(by: "claude-opus-5") { return opus }
         if let first = getModels(for: .anthropic).first ?? getAllModels().first { return first }
         return EnhancedAIModel(
-            id: "claude-opus-4-8", provider: .anthropic, modelID: "claude-opus-4-8",
-            displayName: "Claude Opus 4.8", description: "Default model",
+            id: "claude-opus-5", provider: .anthropic, modelID: "claude-opus-5",
+            displayName: "Claude Opus 5", description: "Default model",
             contextWindow: 1_000_000, maxOutput: 128_000, requiresPaidTier: false,
             capabilities: .default, pricing: nil
         )
@@ -268,9 +269,9 @@ final class AIModelRegistry: @unchecked Sendable {
     func defaultModel(for provider: AIProvider) -> EnhancedAIModel? {
         let preferred: String
         switch provider {
-        case .anthropic: preferred = "claude-opus-4-8"
-        case .openAI: preferred = "gpt-5.2"
-        case .google: preferred = "gemini-3-pro"
+        case .anthropic: preferred = "claude-opus-5"
+        case .openAI: preferred = "gpt-5.6-sol"
+        case .google: preferred = "gemini-3.1-pro-preview"
         case .openRouter: preferred = "anthropic/claude-sonnet-5"
         case .ollama: return getModels(for: provider).first // whatever is installed locally
         }

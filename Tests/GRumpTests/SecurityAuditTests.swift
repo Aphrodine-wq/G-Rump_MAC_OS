@@ -157,9 +157,9 @@ final class SecurityAuditTests: XCTestCase {
 
     func testModelMigrationHandlesUnknownIds() {
         // Unknown model IDs must fall back to a real model, not crash or return nil
-        XCTAssertEqual(ModelIDMigration.map("totally-fake-model-v99"), "claude-opus-4-8")
-        XCTAssertEqual(ModelIDMigration.map(""), "claude-opus-4-8")
-        XCTAssertEqual(ModelIDMigration.map(" "), "claude-opus-4-8")
+        XCTAssertEqual(ModelIDMigration.map("totally-fake-model-v99"), "claude-opus-5")
+        XCTAssertEqual(ModelIDMigration.map(""), "claude-opus-5")
+        XCTAssertEqual(ModelIDMigration.map(" "), "claude-opus-5")
     }
 
     func testModelMigrationPassesThroughCurrentIds() {
